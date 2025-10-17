@@ -1,0 +1,57 @@
+{
+  "name": "kxxxr.js",
+  "version": "0.1.0",
+  "description": "kxxxr.js — Comprehensive WebGL effects library starting with water effects (ripple, realistic). More effects coming soon!",
+  "type": "module",
+  "main": "dist/kxxxr.js",
+  "module": "dist/kxxxr.esm.js",
+  "exports": {
+    ".": {
+      "import": "./dist/kxxxr.esm.js",
+      "default": "./dist/kxxxr.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rollup -c"
+  },
+  "peerDependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^26.0.1",
+    "@rollup/plugin-node-resolve": "^15.2.4",
+    "rollup": "^4.22.4"
+  },
+  "keywords": [
+    "three",
+    "webgl",
+    "effects",
+    "shaders",
+    "water",
+    "ripple",
+    "hover",
+    "interactive",
+    "auto-initialization",
+    "css-classes",
+    "easy-to-use",
+    "particles",
+    "fire",
+    "smoke",
+    "morphing",
+    "comprehensive",
+    "effects-library"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kxxxr/kxxxr.js.git"
+  },
+  "author": "Kabir Khan <kabir@kxxxr.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/kxxxr/kxxxr.js#readme",
+  "bugs": {
+    "url": "https://github.com/kxxxr/kxxxr.js/issues"
+  }
+}
