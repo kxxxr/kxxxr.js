@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "name": "kxxxr-js",
+  "builds": [
+    {
+      "src": "demo/index.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/",
+      "dest": "/demo/index.html"
+    },
+    {
+      "src": "/demo",
+      "dest": "/demo/index.html"
+    },
+    {
+      "src": "/dist/(.*)",
+      "dest": "/dist/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/demo/$1"
+    }
+  ]
+}
