@@ -1,9 +1,0 @@
-{
-  "name": "kxxxr-js-demo",
-  "version": "1.0.0",
-  "description": "Demo for kxxxr.js - WebGL effects library",
-  "scripts": {
-    "build": "echo 'No build step needed for static demo'",
-    "start": "echo 'Demo is ready'"
-  }
-}

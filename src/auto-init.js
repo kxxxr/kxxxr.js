@@ -53,7 +53,11 @@ function initKxxxrEffects() {
 function initRippleEffect(element, index) {
   const imageUrl = getImageUrl(element);
   if (!imageUrl) {
-    console.warn(`kxxxr-ripple: No image found for element ${index}`);
+    console.warn(`kxxxr-ripple: No image found for element ${index}. Please add an image using:
+    - src attribute (for img elements)
+    - background-image CSS property
+    - data-src attribute
+    - data-image attribute`);
     return;
   }
 
@@ -80,7 +84,11 @@ function initRippleEffect(element, index) {
 function initRealisticEffect(element, index) {
   const imageUrl = getImageUrl(element);
   if (!imageUrl) {
-    console.warn(`kxxxr-realistic: No image found for element ${index}`);
+    console.warn(`kxxxr-realistic: No image found for element ${index}. Please add an image using:
+    - src attribute (for img elements)
+    - background-image CSS property
+    - data-src attribute
+    - data-image attribute`);
     return;
   }
 
@@ -107,7 +115,7 @@ function initRealisticEffect(element, index) {
 }
 
 /**
- * Get image URL from element
+ * Get image URL from element or create canvas from element
  */
 function getImageUrl(element) {
   // Check src attribute (img, video)
@@ -123,7 +131,82 @@ function getImageUrl(element) {
   // Check data-src attribute
   if (element.dataset.src) return element.dataset.src;
 
-  return null;
+  // Check data-image attribute
+  if (element.dataset.image) return element.dataset.image;
+
+  // If no image found, create canvas from element content
+  return createCanvasFromElement(element);
+}
+
+/**
+ * Create canvas from any element (div, svg, etc.) using native canvas API
+ */
+function createCanvasFromElement(element) {
+  const rect = element.getBoundingClientRect();
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = rect.width || 400;
+  canvas.height = rect.height || 300;
+
+  // Get computed styles
+  const styles = window.getComputedStyle(element);
+
+  // Draw background color
+  const bgColor = styles.backgroundColor;
+  if (bgColor && bgColor !== "rgba(0, 0, 0, 0)" && bgColor !== "transparent") {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    // Default background
+    ctx.fillStyle = "#f0f0f0";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // Draw text content
+  const textContent = element.textContent || element.innerText;
+  if (textContent && textContent.trim()) {
+    ctx.fillStyle = styles.color || "#000000";
+    ctx.font = styles.font || "16px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Handle text wrapping for long text
+    const words = textContent.trim().split(" ");
+    const maxWidth = canvas.width - 40;
+    let line = "";
+    let y = canvas.height / 2 - (words.length * 20) / 2;
+
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + " ";
+      const metrics = ctx.measureText(testLine);
+      const testWidth = metrics.width;
+
+      if (testWidth > maxWidth && n > 0) {
+        ctx.fillText(line, canvas.width / 2, y);
+        line = words[n] + " ";
+        y += 20;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, canvas.width / 2, y);
+  }
+
+  // For SVG elements, create a simple representation
+  if (element.tagName.toLowerCase() === "svg") {
+    // Draw SVG placeholder
+    ctx.fillStyle = "#e0e0e0";
+    ctx.fillRect(10, 10, canvas.width - 20, canvas.height - 20);
+
+    ctx.fillStyle = "#666";
+    ctx.font = "14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("SVG Element", canvas.width / 2, canvas.height / 2);
+  }
+
+  // Convert canvas to data URL
+  return canvas.toDataURL("image/png");
 }
 
 /**
