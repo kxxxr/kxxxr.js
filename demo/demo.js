@@ -2,7 +2,7 @@
 import {
   waterHoverEffect,
   realisticWaterHoverEffect,
-} from "../dist/kxxxr.esm.js";
+} from "/dist/kxxxr.esm.js";
 
 let currentDispose = null;
 
@@ -149,7 +149,7 @@ async function showEffect(effectType, elementType) {
         imageUrl: realisticImageUrl,
         // width: 400,
         // height: 300,
-        simulationSpeed: 1.4,
+      simulationSpeed: 1.4,
         effectRadius: 25,
         headStrength: 0.7,
         tailStrength: 0.6,
