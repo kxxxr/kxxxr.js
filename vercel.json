@@ -3,7 +3,11 @@
   "name": "kxxxr-js",
   "builds": [
     {
-      "src": "demo/index.html",
+      "src": "demo/**",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "dist/**",
       "use": "@vercel/static"
     }
   ],
@@ -17,12 +21,12 @@
       "dest": "/demo/index.html"
     },
     {
-      "src": "/dist/(.*)",
-      "dest": "/dist/$1"
+      "src": "/demo/(.*)",
+      "dest": "/demo/$1"
     },
     {
-      "src": "/(.*)",
-      "dest": "/demo/$1"
+      "src": "/dist/(.*)",
+      "dest": "/dist/$1"
     }
   ]
 }
