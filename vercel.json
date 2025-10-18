@@ -21,6 +21,14 @@
       "dest": "/demo/index.html"
     },
     {
+      "src": "/demo.js",
+      "dest": "/demo/demo.js"
+    },
+    {
+      "src": "/logoFavi.png",
+      "dest": "/demo/logoFavi.png"
+    },
+    {
       "src": "/demo/(.*)",
       "dest": "/demo/$1"
     },
