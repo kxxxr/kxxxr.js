@@ -217,13 +217,13 @@ export function realisticWaterHoverEffect(canvas, options = {}) {
         vec3 reflectionColor = vec3(1.0, 1.0, 1.0); // White reflection
         
         // 3. CONTRAST CONTROL (1.0 = normal, 1.5 = high contrast, 0.5 = low contrast)
-        float contrast = 0.85;
+        float contrast = 1.0;
         
         // 4. SATURATION CONTROL (1.0 = normal, 1.5 = high saturation, 0.5 = low saturation)
-        float saturation = 0.7;
+        float saturation = 0.95;
         
         // 5. BRIGHTNESS CONTROL (1.0 = original, 1.5 = bright, 0.8 = dark)
-        float brightness = 1.3;
+        float brightness = 1.2;
         
         // 6. TINT CONTROL (RGB values 0.0-1.0)
         vec3 tint = vec3(1.0, 1.0, 1.0); // No tint
