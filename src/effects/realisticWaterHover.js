@@ -217,17 +217,27 @@ export function realisticWaterHoverEffect(canvas, options = {}) {
         vec3 reflectionColor = vec3(1.0, 1.0, 1.0); // White reflection
         
         // 3. CONTRAST CONTROL (1.0 = normal, 1.5 = high contrast, 0.5 = low contrast)
-        float contrast = 1.0;
+        float contrast = 0.65;
         
         // 4. SATURATION CONTROL (1.0 = normal, 1.5 = high saturation, 0.5 = low saturation)
-        float saturation = 0.95;
+        float saturation = 0.9;
         
         // 5. BRIGHTNESS CONTROL (1.0 = original, 1.5 = bright, 0.8 = dark)
-        float brightness = 1.2;
+        float brightness = 1.3;
         
         // 6. TINT CONTROL (RGB values 0.0-1.0)
         vec3 tint = vec3(1.0, 1.0, 1.0); // No tint
+
+        // 7. OVERLAY SHADOW INTENSITY (0.0 = no shadow, 1.0 = full black)
+        float shadowIntensity = -0.28; // <-- Change this value as desired
+
+        // 8. OVERLAY SHADOW SHAPE (vignette: edges get more shadow, center gets less)
+        float vignette = smoothstep(0.0, 0.0, distance(uv, vec2(0.5)));
+
+        // Mix vignette shadow based on control
+        color.rgb = mix(color.rgb, vec3(0.0), vignette * shadowIntensity);
         
+
         // Apply reflection
         color.rgb += reflectionColor * reflectionIntensity * reflection;
         

@@ -31893,17 +31893,27 @@ void main() {
         vec3 reflectionColor = vec3(1.0, 1.0, 1.0); // White reflection
         
         // 3. CONTRAST CONTROL (1.0 = normal, 1.5 = high contrast, 0.5 = low contrast)
-        float contrast = 1.0;
+        float contrast = 0.65;
         
         // 4. SATURATION CONTROL (1.0 = normal, 1.5 = high saturation, 0.5 = low saturation)
-        float saturation = 0.95;
+        float saturation = 0.9;
         
         // 5. BRIGHTNESS CONTROL (1.0 = original, 1.5 = bright, 0.8 = dark)
-        float brightness = 1.2;
+        float brightness = 1.3;
         
         // 6. TINT CONTROL (RGB values 0.0-1.0)
         vec3 tint = vec3(1.0, 1.0, 1.0); // No tint
+
+        // 7. OVERLAY SHADOW INTENSITY (0.0 = no shadow, 1.0 = full black)
+        float shadowIntensity = -0.28; // <-- Change this value as desired
+
+        // 8. OVERLAY SHADOW SHAPE (vignette: edges get more shadow, center gets less)
+        float vignette = smoothstep(0.0, 0.0, distance(uv, vec2(0.5)));
+
+        // Mix vignette shadow based on control
+        color.rgb = mix(color.rgb, vec3(0.0), vignette * shadowIntensity);
         
+
         // Apply reflection
         color.rgb += reflectionColor * reflectionIntensity * reflection;
         
@@ -32155,43 +32165,173 @@ void main() {
 	}
 
 	/**
-	 * Create canvas from any element (div, svg, etc.) using native canvas API
+	 * Create canvas from any element (div, svg, etc.) using enhanced rendering
 	 */
 	function createCanvasFromElement(element) {
 	  const rect = element.getBoundingClientRect();
 	  const canvas = document.createElement("canvas");
 	  const ctx = canvas.getContext("2d");
 
-	  canvas.width = rect.width || 400;
-	  canvas.height = rect.height || 300;
+	  // Use actual element dimensions
+	  const width = rect.width || element.offsetWidth || 400;
+	  const height = rect.height || element.offsetHeight || 300;
+
+	  canvas.width = width;
+	  canvas.height = height;
 
 	  // Get computed styles
 	  const styles = window.getComputedStyle(element);
 
+	  // Draw background with all styling
+	  drawBackground(ctx, styles, width, height);
+
+	  // Draw content based on element type
+	  if (element.tagName.toLowerCase() === "svg") {
+	    drawSVGContentSync(ctx, element, width, height);
+	  } else {
+	    drawHTMLContent(ctx, element, styles, width, height);
+	  }
+
+	  // Convert canvas to data URL
+	  return canvas.toDataURL("image/png");
+	}
+
+	/**
+	 * Draw background with exact styling
+	 */
+	function drawBackground(ctx, styles, width, height) {
 	  // Draw background color
 	  const bgColor = styles.backgroundColor;
 	  if (bgColor && bgColor !== "rgba(0, 0, 0, 0)" && bgColor !== "transparent") {
 	    ctx.fillStyle = bgColor;
-	    ctx.fillRect(0, 0, canvas.width, canvas.height);
-	  } else {
-	    // Default background
-	    ctx.fillStyle = "#f0f0f0";
-	    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+	    // Handle border radius
+	    const borderRadius = parseFloat(styles.borderRadius) || 0;
+	    if (borderRadius > 0) {
+	      ctx.beginPath();
+	      ctx.roundRect(0, 0, width, height, borderRadius);
+	      ctx.fill();
+	    } else {
+	      ctx.fillRect(0, 0, width, height);
+	    }
 	  }
 
-	  // Draw text content
+	  // Draw background image if exists
+	  const bgImage = styles.backgroundImage;
+	  if (bgImage && bgImage !== "none") {
+	    const match = bgImage.match(/url\(['"]?([^'"]+)['"]?\)/);
+	    if (match) {
+	      const img = new Image();
+	      img.crossOrigin = "anonymous";
+	      img.onload = function () {
+	        // Apply background-size and background-position
+	        const bgSize = styles.backgroundSize || "auto";
+	        styles.backgroundPosition || "0% 0%";
+
+	        if (bgSize === "cover") {
+	          const scale = Math.max(width / img.width, height / img.height);
+	          const scaledWidth = img.width * scale;
+	          const scaledHeight = img.height * scale;
+	          const x = (width - scaledWidth) / 2;
+	          const y = (height - scaledHeight) / 2;
+	          ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+	        } else if (bgSize === "contain") {
+	          const scale = Math.min(width / img.width, height / img.height);
+	          const scaledWidth = img.width * scale;
+	          const scaledHeight = img.height * scale;
+	          const x = (width - scaledWidth) / 2;
+	          const y = (height - scaledHeight) / 2;
+	          ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+	        } else {
+	          ctx.drawImage(img, 0, 0, width, height);
+	        }
+	      };
+	      img.src = match[1];
+	    }
+	  }
+	}
+
+	/**
+	 * Draw HTML content with enhanced styling
+	 */
+	function drawHTMLContent(ctx, element, styles, width, height) {
+	  // Get display properties
+	  const display = styles.display;
+	  styles.flexDirection;
+	  styles.alignItems;
+	  styles.justifyContent;
+
+	  // Handle flexbox layout
+	  if (display === "flex") {
+	    drawFlexContent(ctx, element, styles, width, height);
+	  } else {
+	    drawBlockContent(ctx, element, styles, width, height);
+	  }
+	}
+
+	/**
+	 * Draw flexbox content
+	 */
+	function drawFlexContent(ctx, element, styles, width, height) {
 	  const textContent = element.textContent || element.innerText;
 	  if (textContent && textContent.trim()) {
+	    // Set exact font properties
+	    ctx.fillStyle = styles.color || "#000000";
+	    ctx.font = styles.font || "16px Arial";
+
+	    // Handle text alignment based on flex properties
+	    if (styles.alignItems === "center") {
+	      ctx.textBaseline = "middle";
+	    } else if (styles.alignItems === "flex-start") {
+	      ctx.textBaseline = "top";
+	    } else if (styles.alignItems === "flex-end") {
+	      ctx.textBaseline = "bottom";
+	    } else {
+	      ctx.textBaseline = "middle";
+	    }
+
+	    if (styles.justifyContent === "center") {
+	      ctx.textAlign = "center";
+	    } else if (styles.justifyContent === "flex-start") {
+	      ctx.textAlign = "left";
+	    } else if (styles.justifyContent === "flex-end") {
+	      ctx.textAlign = "right";
+	    } else {
+	      ctx.textAlign = "center";
+	    }
+
+	    // Calculate text position
+	    let x = width / 2;
+	    let y = height / 2;
+
+	    if (styles.justifyContent === "flex-start") x = 20;
+	    if (styles.justifyContent === "flex-end") x = width - 20;
+	    if (styles.alignItems === "flex-start") y = 20;
+	    if (styles.alignItems === "flex-end") y = height - 20;
+
+	    ctx.fillText(textContent.trim(), x, y);
+	  }
+	}
+
+	/**
+	 * Draw block content
+	 */
+	function drawBlockContent(ctx, element, styles, width, height) {
+	  const textContent = element.textContent || element.innerText;
+	  if (textContent && textContent.trim()) {
+	    // Set exact font properties
 	    ctx.fillStyle = styles.color || "#000000";
 	    ctx.font = styles.font || "16px Arial";
 	    ctx.textAlign = "center";
 	    ctx.textBaseline = "middle";
 
-	    // Handle text wrapping for long text
+	    // Handle text wrapping
 	    const words = textContent.trim().split(" ");
-	    const maxWidth = canvas.width - 40;
+	    const maxWidth = width - 40;
+	    const fontSize = parseFloat(styles.fontSize) || 16;
+	    const lineHeight = fontSize * 1.2;
 	    let line = "";
-	    let y = canvas.height / 2 - (words.length * 20) / 2;
+	    let y = height / 2 - (words.length * lineHeight) / 2;
 
 	    for (let n = 0; n < words.length; n++) {
 	      const testLine = line + words[n] + " ";
@@ -32199,30 +32339,89 @@ void main() {
 	      const testWidth = metrics.width;
 
 	      if (testWidth > maxWidth && n > 0) {
-	        ctx.fillText(line, canvas.width / 2, y);
+	        ctx.fillText(line, width / 2, y);
 	        line = words[n] + " ";
-	        y += 20;
+	        y += lineHeight;
 	      } else {
 	        line = testLine;
 	      }
 	    }
-	    ctx.fillText(line, canvas.width / 2, y);
+	    ctx.fillText(line, width / 2, y);
 	  }
+	}
 
-	  // For SVG elements, create a simple representation
-	  if (element.tagName.toLowerCase() === "svg") {
-	    // Draw SVG placeholder
+	/**
+	 * Draw SVG content synchronously
+	 */
+	function drawSVGContentSync(ctx, element, width, height) {
+	  // For SVG, create a simple representation based on SVG content
+	  try {
+	    // Get SVG children to understand what to draw
+	    const rects = element.querySelectorAll("rect");
+	    const circles = element.querySelectorAll("circle");
+	    const texts = element.querySelectorAll("text");
+
+	    // Draw rectangles
+	    rects.forEach((rect) => {
+	      const fill = rect.getAttribute("fill") || "#e0e0e0";
+	      const x = parseFloat(rect.getAttribute("x")) || 0;
+	      const y = parseFloat(rect.getAttribute("y")) || 0;
+	      const rectWidth = parseFloat(rect.getAttribute("width")) || width;
+	      const rectHeight = parseFloat(rect.getAttribute("height")) || height;
+
+	      ctx.fillStyle = fill;
+	      ctx.fillRect(x, y, rectWidth, rectHeight);
+	    });
+
+	    // Draw circles
+	    circles.forEach((circle) => {
+	      const fill = circle.getAttribute("fill") || "#e0e0e0";
+	      const cx = parseFloat(circle.getAttribute("cx")) || width / 2;
+	      const cy = parseFloat(circle.getAttribute("cy")) || height / 2;
+	      const r = parseFloat(circle.getAttribute("r")) || 50;
+
+	      ctx.fillStyle = fill;
+	      ctx.beginPath();
+	      ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+	      ctx.fill();
+	    });
+
+	    // Draw text
+	    texts.forEach((text) => {
+	      const fill = text.getAttribute("fill") || "#000000";
+	      const x = parseFloat(text.getAttribute("x")) || width / 2;
+	      const y = parseFloat(text.getAttribute("y")) || height / 2;
+	      const fontSize = text.getAttribute("font-size") || "16";
+	      const fontFamily = text.getAttribute("font-family") || "Arial";
+	      const textContent = text.textContent || "SVG Text";
+
+	      ctx.fillStyle = fill;
+	      ctx.font = `${fontSize}px ${fontFamily}`;
+	      ctx.textAlign = "center";
+	      ctx.textBaseline = "middle";
+	      ctx.fillText(textContent, x, y);
+	    });
+
+	    // If no specific elements found, draw a simple representation
+	    if (rects.length === 0 && circles.length === 0 && texts.length === 0) {
+	      ctx.fillStyle = "#e0e0e0";
+	      ctx.fillRect(10, 10, width - 20, height - 20);
+
+	      ctx.fillStyle = "#666";
+	      ctx.font = "14px Arial";
+	      ctx.textAlign = "center";
+	      ctx.fillText("SVG Element", width / 2, height / 2);
+	    }
+	  } catch (e) {
+	    // Fallback for SVG
 	    ctx.fillStyle = "#e0e0e0";
-	    ctx.fillRect(10, 10, canvas.width - 20, canvas.height - 20);
+	    ctx.fillRect(10, 10, width - 20, height - 20);
 
 	    ctx.fillStyle = "#666";
 	    ctx.font = "14px Arial";
 	    ctx.textAlign = "center";
-	    ctx.fillText("SVG Element", canvas.width / 2, canvas.height / 2);
+	    ctx.fillText("SVG Element", width / 2, height / 2);
 	  }
-
-	  // Convert canvas to data URL
-	  return canvas.toDataURL("image/png");
 	}
 
 	/**
@@ -32233,11 +32432,26 @@ void main() {
 
 	  // Create canvas
 	  const canvas = document.createElement("canvas");
-	  canvas.width = rect.width || 400;
-	  canvas.height = rect.height || 300;
-	  canvas.style.width = "100%";
-	  canvas.style.height = "100%";
+
+	  // Use actual element dimensions
+	  const width = rect.width || element.offsetWidth || 400;
+	  const height = rect.height || element.offsetHeight || 300;
+
+	  canvas.width = width;
+	  canvas.height = height;
+
+	  // Set CSS size to match original element
+	  canvas.style.width = width + "px";
+	  canvas.style.height = height + "px";
 	  canvas.style.display = "block";
+
+	  // Preserve original styling
+	  const styles = window.getComputedStyle(element);
+	  canvas.style.borderRadius = styles.borderRadius;
+	  canvas.style.border = styles.border;
+	  canvas.style.boxShadow = styles.boxShadow;
+	  canvas.style.margin = styles.margin;
+	  canvas.style.padding = styles.padding;
 
 	  // Replace element with canvas
 	  element.parentNode.replaceChild(canvas, element);
