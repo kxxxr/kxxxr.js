@@ -22,6 +22,14 @@ const DEFAULT_CONFIGS = {
     headStrength: 0.7, // Stronger effect
     tailStrength: 0.6, // Stronger tail
     tailWidth: 20, // Wider tail
+    // Advanced filter customization (defaults match shader)
+    reflectionIntensity: 0.5,
+    reflectionColor: "#ffffff",
+    contrast: 0.65,
+    saturation: 0.9,
+    brightness: 1.3,
+    tint: "#ffffff",
+    shadowIntensity: -0.28,
   },
 };
 
@@ -107,6 +115,7 @@ function initRealisticEffect(element, index) {
     imageUrl,
     width: Math.min(rect.width || 400, 384),
     height: Math.min(rect.height || 300, 288),
+    ...mapAdvancedFilterConfig(config),
     ...config,
   });
 
@@ -441,12 +450,25 @@ function getConfigFromAttributes(element, effectType) {
 
   // Parse data attributes
   Object.keys(config).forEach((key) => {
-    const attrName = `data-${key}`;
-    const value = element.getAttribute(attrName);
+    // support data-camel and data-kebab
+    const kebab = key.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+    const candidates = [`data-${key}`, `data-${kebab}`];
+    let value = null;
+    for (const name of candidates) {
+      const v = element.getAttribute(name);
+      if (v !== null) {
+        value = v;
+        break;
+      }
+    }
     if (value !== null) {
-      // Try to parse as number, fallback to string
-      const numValue = parseFloat(value);
-      config[key] = isNaN(numValue) ? value : numValue;
+      // Color strings (#rrggbb or rgb/rgba) should remain strings
+      if (/^#|^rgb\(/i.test(value)) {
+        config[key] = value;
+      } else {
+        const numValue = parseFloat(value);
+        config[key] = isNaN(numValue) ? value : numValue;
+      }
     }
   });
 
@@ -480,6 +502,40 @@ if (document.readyState === "loading") {
 
 // Export for manual control
 export { initKxxxrEffects, cleanupKxxxrEffects, reinitKxxxrEffects };
+
+// Helpers to map string colors to THREE.Color-compatible uniforms
+function parseCssColorToLinear(color) {
+  if (!color) return { r: 1, g: 1, b: 1 };
+  const ctx = document.createElement("canvas").getContext("2d");
+  ctx.fillStyle = color;
+  const computed = ctx.fillStyle; // normalized css color
+  // Extract rgb(a)
+  const m = computed.match(/rgba?\(([^)]+)\)/);
+  if (m) {
+    const [r, g, b] = m[1]
+      .split(",")
+      .slice(0, 3)
+      .map((v) => parseInt(v.trim(), 10) / 255);
+    return { r, g, b };
+  }
+  // Fallback white
+  return { r: 1, g: 1, b: 1 };
+}
+
+function mapAdvancedFilterConfig(c) {
+  const out = {};
+  if (c.reflectionIntensity !== undefined)
+    out.reflectionIntensity = Number(c.reflectionIntensity);
+  if (c.contrast !== undefined) out.contrast = Number(c.contrast);
+  if (c.saturation !== undefined) out.saturation = Number(c.saturation);
+  if (c.brightness !== undefined) out.brightness = Number(c.brightness);
+  if (c.shadowIntensity !== undefined)
+    out.shadowIntensity = Number(c.shadowIntensity);
+  if (c.reflectionColor)
+    out.reflectionColor = parseCssColorToLinear(c.reflectionColor);
+  if (c.tint) out.tint = parseCssColorToLinear(c.tint);
+  return out;
+}
 
 // Simple API functions for easy usage
 function rippleEffect(selector, options = {}) {
@@ -536,6 +592,7 @@ function realisticEffectSimple(selector, options = {}) {
       imageUrl,
       width: Math.min(rect.width || 400, 384),
       height: Math.min(rect.height || 300, 288),
+      ...mapAdvancedFilterConfig(config),
       ...config,
     });
 

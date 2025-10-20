@@ -31692,6 +31692,14 @@ void main() {
 	    headStrength = 1.0,
 	    tailStrength = 0.6,
 	    tailWidth = effectRadius,
+	    // Advanced filter customization
+	    reflectionIntensity = 0.5,
+	    reflectionColor = "#ffffff",
+	    contrast = 0.65,
+	    saturation = 0.9,
+	    brightness = 1.3,
+	    tint = "#ffffff",
+	    shadowIntensity = -0.28,
 	  } = options;
 
 	  // Optimize resolution for smooth but fast performance
@@ -31861,6 +31869,13 @@ void main() {
 	      iChannel0: { value: null }, // physics buffer
 	      iChannel1: { value: imageTex }, // image
 	      iResolution: { value: new Vector2(renderWidth, renderHeight) },
+	      uReflectionIntensity: { value: 0.5 },
+	      uReflectionColor: { value: new Color(1, 1, 1) },
+	      uContrast: { value: 0.65 },
+	      uSaturation: { value: 0.9 },
+	      uBrightness: { value: 1.3 },
+	      uTint: { value: new Color(1, 1, 1) },
+	      uShadowIntensity: { value: -0.28 },
 	    },
 	    vertexShader: `
       varying vec2 vUv;
@@ -31875,6 +31890,14 @@ void main() {
       uniform sampler2D iChannel0;
       uniform sampler2D iChannel1;
       uniform vec2 iResolution;
+      // Advanced filter uniforms
+      uniform float uReflectionIntensity;
+      uniform vec3  uReflectionColor;
+      uniform float uContrast;
+      uniform float uSaturation;
+      uniform float uBrightness;
+      uniform vec3  uTint;
+      uniform float uShadowIntensity;
       void main() {
         vec2 uv = vUv;
         vec4 data = texture2D(iChannel0, uv);
@@ -31884,28 +31907,14 @@ void main() {
         vec3 normal = normalize(vec3(-data.z, 0.2, -data.w));
         float reflection = pow(max(0.0, dot(normal, normalize(vec3(-3.0, 10.0, 3.0)))), 60.0);
         
-        // ADVANCED FILTER CUSTOMIZATION - Adjust these values:
-        
-        // 1. REFLECTION INTENSITY (0.0 = no reflection, 1.0 = full reflection)
-        float reflectionIntensity = 0.5;
-        
-        // 2. REFLECTION COLOR (RGB values 0.0-1.0)
-        vec3 reflectionColor = vec3(1.0, 1.0, 1.0); // White reflection
-        
-        // 3. CONTRAST CONTROL (1.0 = normal, 1.5 = high contrast, 0.5 = low contrast)
-        float contrast = 0.65;
-        
-        // 4. SATURATION CONTROL (1.0 = normal, 1.5 = high saturation, 0.5 = low saturation)
-        float saturation = 0.9;
-        
-        // 5. BRIGHTNESS CONTROL (1.0 = original, 1.5 = bright, 0.8 = dark)
-        float brightness = 1.3;
-        
-        // 6. TINT CONTROL (RGB values 0.0-1.0)
-        vec3 tint = vec3(1.0, 1.0, 1.0); // No tint
-
-        // 7. OVERLAY SHADOW INTENSITY (0.0 = no shadow, 1.0 = full black)
-        float shadowIntensity = -0.28; // <-- Change this value as desired
+        // Advanced filter uniforms
+        float reflectionIntensity = uReflectionIntensity;
+        vec3 reflectionColor = uReflectionColor.rgb;
+        float contrast = uContrast;
+        float saturation = uSaturation;
+        float brightness = uBrightness;
+        vec3 tint = uTint.rgb;
+        float shadowIntensity = uShadowIntensity;
 
         // 8. OVERLAY SHADOW SHAPE (vignette: edges get more shadow, center gets less)
         float vignette = smoothstep(0.0, 0.0, distance(uv, vec2(0.5)));
@@ -31937,6 +31946,23 @@ void main() {
       }
     `,
 	  });
+
+	  // Apply initial advanced filter values from options
+	  displayMaterial.uniforms.uReflectionIntensity.value = reflectionIntensity;
+	  if (typeof reflectionColor === "object") {
+	    displayMaterial.uniforms.uReflectionColor.value.set(
+	      reflectionColor.r,
+	      reflectionColor.g,
+	      reflectionColor.b
+	    );
+	  }
+	  displayMaterial.uniforms.uContrast.value = contrast;
+	  displayMaterial.uniforms.uSaturation.value = saturation;
+	  displayMaterial.uniforms.uBrightness.value = brightness;
+	  if (typeof tint === "object") {
+	    displayMaterial.uniforms.uTint.value.set(tint.r, tint.g, tint.b);
+	  }
+	  displayMaterial.uniforms.uShadowIntensity.value = shadowIntensity;
 
 	  // Fullscreen quad scene for both passes
 	  const scene = new Scene();
@@ -32048,6 +32074,14 @@ void main() {
 	    headStrength: 0.7, // Stronger effect
 	    tailStrength: 0.6, // Stronger tail
 	    tailWidth: 20, // Wider tail
+	    // Advanced filter customization (defaults match shader)
+	    reflectionIntensity: 0.5,
+	    reflectionColor: "#ffffff",
+	    contrast: 0.65,
+	    saturation: 0.9,
+	    brightness: 1.3,
+	    tint: "#ffffff",
+	    shadowIntensity: -0.28,
 	  },
 	};
 
@@ -32133,6 +32167,7 @@ void main() {
 	    imageUrl,
 	    width: Math.min(rect.width || 400, 384),
 	    height: Math.min(rect.height || 300, 288),
+	    ...mapAdvancedFilterConfig(config),
 	    ...config,
 	  });
 
@@ -32467,12 +32502,25 @@ void main() {
 
 	  // Parse data attributes
 	  Object.keys(config).forEach((key) => {
-	    const attrName = `data-${key}`;
-	    const value = element.getAttribute(attrName);
+	    // support data-camel and data-kebab
+	    const kebab = key.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+	    const candidates = [`data-${key}`, `data-${kebab}`];
+	    let value = null;
+	    for (const name of candidates) {
+	      const v = element.getAttribute(name);
+	      if (v !== null) {
+	        value = v;
+	        break;
+	      }
+	    }
 	    if (value !== null) {
-	      // Try to parse as number, fallback to string
-	      const numValue = parseFloat(value);
-	      config[key] = isNaN(numValue) ? value : numValue;
+	      // Color strings (#rrggbb or rgb/rgba) should remain strings
+	      if (/^#|^rgb\(/i.test(value)) {
+	        config[key] = value;
+	      } else {
+	        const numValue = parseFloat(value);
+	        config[key] = isNaN(numValue) ? value : numValue;
+	      }
 	    }
 	  });
 
@@ -32502,6 +32550,40 @@ void main() {
 	  document.addEventListener("DOMContentLoaded", initKxxxrEffects);
 	} else {
 	  initKxxxrEffects();
+	}
+
+	// Helpers to map string colors to THREE.Color-compatible uniforms
+	function parseCssColorToLinear(color) {
+	  if (!color) return { r: 1, g: 1, b: 1 };
+	  const ctx = document.createElement("canvas").getContext("2d");
+	  ctx.fillStyle = color;
+	  const computed = ctx.fillStyle; // normalized css color
+	  // Extract rgb(a)
+	  const m = computed.match(/rgba?\(([^)]+)\)/);
+	  if (m) {
+	    const [r, g, b] = m[1]
+	      .split(",")
+	      .slice(0, 3)
+	      .map((v) => parseInt(v.trim(), 10) / 255);
+	    return { r, g, b };
+	  }
+	  // Fallback white
+	  return { r: 1, g: 1, b: 1 };
+	}
+
+	function mapAdvancedFilterConfig(c) {
+	  const out = {};
+	  if (c.reflectionIntensity !== undefined)
+	    out.reflectionIntensity = Number(c.reflectionIntensity);
+	  if (c.contrast !== undefined) out.contrast = Number(c.contrast);
+	  if (c.saturation !== undefined) out.saturation = Number(c.saturation);
+	  if (c.brightness !== undefined) out.brightness = Number(c.brightness);
+	  if (c.shadowIntensity !== undefined)
+	    out.shadowIntensity = Number(c.shadowIntensity);
+	  if (c.reflectionColor)
+	    out.reflectionColor = parseCssColorToLinear(c.reflectionColor);
+	  if (c.tint) out.tint = parseCssColorToLinear(c.tint);
+	  return out;
 	}
 
 	// Simple API functions for easy usage
@@ -32559,6 +32641,7 @@ void main() {
 	      imageUrl,
 	      width: Math.min(rect.width || 400, 384),
 	      height: Math.min(rect.height || 300, 288),
+	      ...mapAdvancedFilterConfig(config),
 	      ...config,
 	    });
 

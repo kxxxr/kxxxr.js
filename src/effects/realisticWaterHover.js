@@ -16,6 +16,14 @@ export function realisticWaterHoverEffect(canvas, options = {}) {
     headStrength = 1.0,
     tailStrength = 0.6,
     tailWidth = effectRadius,
+    // Advanced filter customization
+    reflectionIntensity = 0.5,
+    reflectionColor = "#ffffff",
+    contrast = 0.65,
+    saturation = 0.9,
+    brightness = 1.3,
+    tint = "#ffffff",
+    shadowIntensity = -0.28,
   } = options;
 
   // Optimize resolution for smooth but fast performance
@@ -185,6 +193,13 @@ export function realisticWaterHoverEffect(canvas, options = {}) {
       iChannel0: { value: null }, // physics buffer
       iChannel1: { value: imageTex }, // image
       iResolution: { value: new THREE.Vector2(renderWidth, renderHeight) },
+      uReflectionIntensity: { value: 0.5 },
+      uReflectionColor: { value: new THREE.Color(1, 1, 1) },
+      uContrast: { value: 0.65 },
+      uSaturation: { value: 0.9 },
+      uBrightness: { value: 1.3 },
+      uTint: { value: new THREE.Color(1, 1, 1) },
+      uShadowIntensity: { value: -0.28 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -199,6 +214,14 @@ export function realisticWaterHoverEffect(canvas, options = {}) {
       uniform sampler2D iChannel0;
       uniform sampler2D iChannel1;
       uniform vec2 iResolution;
+      // Advanced filter uniforms
+      uniform float uReflectionIntensity;
+      uniform vec3  uReflectionColor;
+      uniform float uContrast;
+      uniform float uSaturation;
+      uniform float uBrightness;
+      uniform vec3  uTint;
+      uniform float uShadowIntensity;
       void main() {
         vec2 uv = vUv;
         vec4 data = texture2D(iChannel0, uv);
@@ -208,28 +231,14 @@ export function realisticWaterHoverEffect(canvas, options = {}) {
         vec3 normal = normalize(vec3(-data.z, 0.2, -data.w));
         float reflection = pow(max(0.0, dot(normal, normalize(vec3(-3.0, 10.0, 3.0)))), 60.0);
         
-        // ADVANCED FILTER CUSTOMIZATION - Adjust these values:
-        
-        // 1. REFLECTION INTENSITY (0.0 = no reflection, 1.0 = full reflection)
-        float reflectionIntensity = 0.5;
-        
-        // 2. REFLECTION COLOR (RGB values 0.0-1.0)
-        vec3 reflectionColor = vec3(1.0, 1.0, 1.0); // White reflection
-        
-        // 3. CONTRAST CONTROL (1.0 = normal, 1.5 = high contrast, 0.5 = low contrast)
-        float contrast = 0.65;
-        
-        // 4. SATURATION CONTROL (1.0 = normal, 1.5 = high saturation, 0.5 = low saturation)
-        float saturation = 0.9;
-        
-        // 5. BRIGHTNESS CONTROL (1.0 = original, 1.5 = bright, 0.8 = dark)
-        float brightness = 1.3;
-        
-        // 6. TINT CONTROL (RGB values 0.0-1.0)
-        vec3 tint = vec3(1.0, 1.0, 1.0); // No tint
-
-        // 7. OVERLAY SHADOW INTENSITY (0.0 = no shadow, 1.0 = full black)
-        float shadowIntensity = -0.28; // <-- Change this value as desired
+        // Advanced filter uniforms
+        float reflectionIntensity = uReflectionIntensity;
+        vec3 reflectionColor = uReflectionColor.rgb;
+        float contrast = uContrast;
+        float saturation = uSaturation;
+        float brightness = uBrightness;
+        vec3 tint = uTint.rgb;
+        float shadowIntensity = uShadowIntensity;
 
         // 8. OVERLAY SHADOW SHAPE (vignette: edges get more shadow, center gets less)
         float vignette = smoothstep(0.0, 0.0, distance(uv, vec2(0.5)));
@@ -261,6 +270,23 @@ export function realisticWaterHoverEffect(canvas, options = {}) {
       }
     `,
   });
+
+  // Apply initial advanced filter values from options
+  displayMaterial.uniforms.uReflectionIntensity.value = reflectionIntensity;
+  if (typeof reflectionColor === "object") {
+    displayMaterial.uniforms.uReflectionColor.value.set(
+      reflectionColor.r,
+      reflectionColor.g,
+      reflectionColor.b
+    );
+  }
+  displayMaterial.uniforms.uContrast.value = contrast;
+  displayMaterial.uniforms.uSaturation.value = saturation;
+  displayMaterial.uniforms.uBrightness.value = brightness;
+  if (typeof tint === "object") {
+    displayMaterial.uniforms.uTint.value.set(tint.r, tint.g, tint.b);
+  }
+  displayMaterial.uniforms.uShadowIntensity.value = shadowIntensity;
 
   // Fullscreen quad scene for both passes
   const scene = new THREE.Scene();

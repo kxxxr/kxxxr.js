@@ -4,13 +4,19 @@
 
 kxxxr.js transforms any DOM element into beautiful, interactive water effects with mouse displacement, rendered in high-performance WebGL.
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/kxxxr/kxxxr.js)
+[![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)](https://github.com/kxxxr/kxxxr.js)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![WebGL](https://img.shields.io/badge/WebGL-Required-orange.svg)](https://get.webgl.org/)
 
 ## Overview
 
 kxxxr.js brings interactive water effects to the web with a lightweight WebGL renderer. It converts any DOM element, images, SVGs, or divs into responsive water systems that react to mouse movement. The library features smooth ripple distortions and realistic water physics, creating natural and performant user experiences.
+
+## Demo
+
+[Live Demo (Vercel)](https://kxxxr-js.vercel.app)
+
+![kxxxr.js Demo Preview](demo/preview.gif)
 
 ## Key Features
 
@@ -78,6 +84,14 @@ If you want to customize effects, use the simple API:
     simulationSpeed: 1.4, // not more than 1.4
     effectRadius: 25,
     headStrength: 0.8,
+    // Advanced filter customization (optional)
+    reflectionIntensity: 0.8,
+    reflectionColor: "#ffffff",
+    contrast: 1.1,
+    saturation: 1.1,
+    brightness: 1.1,
+    tint: "#ffffff",
+    shadowIntensity: -0.15,
   });
 </script>
 ```
@@ -99,6 +113,18 @@ In addition to JavaScript options, kxxxr.js can be configured using data attribu
 | `data-tailStrength`    | Tail effect strength     | `data-tailStrength="0.6"`    |
 | `data-tailWidth`       | Tail width               | `data-tailWidth="25"`        |
 
+Advanced filter customization (for `kxxxr-realistic`). Both kebab-case and camelCase are supported, e.g. `data-reflection-intensity` or `data-reflectionIntensity`:
+
+| Attribute                  | Type   | Default   | Description                                  |
+| -------------------------- | ------ | --------- | -------------------------------------------- |
+| `data-reflectionIntensity` | number | `0.5`     | Reflection intensity (0.0–1.0)               |
+| `data-reflectionColor`     | color  | `#ffffff` | Reflection color (CSS color)                 |
+| `data-contrast`            | number | `0.65`    | Contrast multiplier                          |
+| `data-saturation`          | number | `0.9`     | Saturation multiplier                        |
+| `data-brightness`          | number | `1.3`     | Brightness multiplier                        |
+| `data-tint`                | color  | `#ffffff` | Multiplicative tint color                    |
+| `data-shadowIntensity`     | number | `-0.28`   | Vignette shadow intensity (negative allowed) |
+
 ```html
 <!-- Custom ripple effect -->
 <img
@@ -115,6 +141,13 @@ In addition to JavaScript options, kxxxr.js can be configured using data attribu
   style="background-image: url('image.jpg')"
   data-simulationSpeed="1.8"
   data-effectRadius="35"
+  data-reflectionIntensity="0.8"
+  data-reflectionColor="#ffffff"
+  data-contrast="1.1"
+  data-saturation="1.1"
+  data-brightness="1.1"
+  data-tint="#ffffff"
+  data-shadowIntensity="-0.15"
 ></div>
 ```
 
@@ -165,13 +198,20 @@ Advanced water simulation with physics-based fluid dynamics and realistic displa
 
 ### Realistic Water Effect Options
 
-| Option            | Type   | Default | Description                        |
-| ----------------- | ------ | ------- | ---------------------------------- |
-| `simulationSpeed` | number | `1.2`   | Physics simulation speed (0.5–3.0) |
-| `effectRadius`    | number | `25`    | Head radius (10–50)                |
-| `headStrength`    | number | `0.7`   | Head effect strength (0.1–1.0)     |
-| `tailStrength`    | number | `0.6`   | Tail effect strength (0.1–1.0)     |
-| `tailWidth`       | number | `20`    | Tail width (5–40)                  |
+| Option                | Type   | Default   | Description                                  |
+| --------------------- | ------ | --------- | -------------------------------------------- |
+| `simulationSpeed`     | number | `1.2`     | Physics simulation speed (0.5–3.0)           |
+| `effectRadius`        | number | `25`      | Head radius (10–50)                          |
+| `headStrength`        | number | `0.7`     | Head effect strength (0.1–1.0)               |
+| `tailStrength`        | number | `0.6`     | Tail effect strength (0.1–1.0)               |
+| `tailWidth`           | number | `20`      | Tail width (5–40)                            |
+| `reflectionIntensity` | number | `0.5`     | Reflection intensity (0.0–1.0)               |
+| `reflectionColor`     | color  | `#ffffff` | Reflection color (CSS color)                 |
+| `contrast`            | number | `0.65`    | Contrast multiplier                          |
+| `saturation`          | number | `0.9`     | Saturation multiplier                        |
+| `brightness`          | number | `1.3`     | Brightness multiplier                        |
+| `tint`                | color  | `#ffffff` | Multiplicative tint color                    |
+| `shadowIntensity`     | number | `-0.28`   | Vignette shadow intensity (negative allowed) |
 
 ## Presets
 
