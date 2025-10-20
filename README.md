@@ -14,9 +14,9 @@ kxxxr.js brings interactive water effects to the web with a lightweight WebGL re
 
 ## Demo
 
-[Live Demo (Vercel)](https://kxxxr-js.vercel.app)
+[Live Demo](https://kxxxr-js.vercel.app)
 
-![kxxxr.js Demo Preview](demo/preview.gif)
+![kxxxr.js Demo Preview](demo/demo.gif)
 
 ## Key Features
 
