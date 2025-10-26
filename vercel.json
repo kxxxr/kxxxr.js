@@ -17,6 +17,10 @@
       "dest": "/demo/index.html"
     },
     {
+      "src": "/assets/(.*)",
+      "dest": "/demo/assets/$1"
+    },
+    {
       "src": "/demo",
       "dest": "/demo/index.html"
     },
@@ -26,7 +30,7 @@
     },
     {
       "src": "/logoFavi.png",
-      "dest": "/demo/logoFavi.png"
+      "dest": "/demo/assets/logoFavi.png"
     },
     {
       "src": "/demo/(.*)",
