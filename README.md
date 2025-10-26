@@ -118,6 +118,8 @@ If you want to customize effects, use the simple API:
     strength: 0.1, // Stronger effect
     radius: 0.4, // Larger radius
     pulseSpeed: 3.0, // Faster animation
+    decay: 2.5, // Amplitude decay rate (higher fades waves faster)
+    frequency: 20, // Wave frequency (visual detail)
   });
 
   // Custom realistic effect
