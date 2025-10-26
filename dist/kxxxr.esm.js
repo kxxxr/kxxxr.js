@@ -31585,7 +31585,6 @@ function waterHoverEffect(canvas, options = {}) {
   camera.position.z = 1;
 
   const loader = new TextureLoader();
-  if (loader.setCrossOrigin) loader.setCrossOrigin("anonymous");
   const texture = loader.load(imageUrl);
   texture.colorSpace = SRGBColorSpace;
   texture.minFilter = LinearFilter;
@@ -32157,9 +32156,6 @@ function glitchEffect(canvas, options = {}) {
   let isVideo = false;
 
   if (videoElement) {
-    try {
-      if (!videoElement.crossOrigin) videoElement.crossOrigin = "anonymous";
-    } catch {}
     // Video texture
     isVideo = true;
 
@@ -32179,7 +32175,6 @@ function glitchEffect(canvas, options = {}) {
   } else {
     // Image texture
     const loader = new TextureLoader();
-    if (loader.setCrossOrigin) loader.setCrossOrigin("anonymous");
     tex = loader.load(imageUrl);
     tex.colorSpace = SRGBColorSpace;
     tex.minFilter = LinearFilter;
@@ -32638,7 +32633,6 @@ function fluidSimulationEffect(canvas, options = {}) {
 
   // Load textures
   const loader = new TextureLoader();
-  if (loader.setCrossOrigin) loader.setCrossOrigin("anonymous");
   const topTextureSize = new Vector2(1024, 1024);
   const bottomTextureSize = new Vector2(1024, 1024);
 
