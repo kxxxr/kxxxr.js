@@ -1,11 +1,7 @@
 import { waterHoverEffect } from "./effects/waterHover.js";
 import { realisticWaterHoverEffect as realisticEffect } from "./effects/realisticWaterHover.js";
-
-/**
- * Auto-initialize effects based on CSS classes
- * Usage: <img class="kxxxr-ripple" src="image.jpg" />
- *        <div class="kxxxr-realistic" style="background-image: url('image.jpg')"></div>
- */
+import { glitchEffect } from "./effects/glitch.js";
+import { fluidSimulationEffect as fluidEffect } from "./effects/fluidSimulation.js";
 
 // Default configurations for each effect - smooth but fast
 const DEFAULT_CONFIGS = {
@@ -31,33 +27,55 @@ const DEFAULT_CONFIGS = {
     tint: "#ffffff",
     shadowIntensity: -0.28,
   },
+
+  fluid: {
+    speed: 1.0,
+    decay: 0.97,
+    lineWidth: 0.05,
+    lineIntensity: 0.3,
+    threshold: 0.02,
+    edgeWidth: 0.004,
+    movementTimeout: 50,
+    hiDPI: true,
+  },
+  glitch: {
+    speed: 1.0,
+    intensity: 0.7,
+    chromaShift: 3.0,
+    displacement: 0.05,
+    noiseAmount: 0.15,
+    scanlineIntensity: 0.3,
+    glitchFrequency: 0.3,
+    horrorMode: false,
+    enableWarping: true,
+    warpingAmount: 0.3,
+    vignette: 0.0,
+    edgeChromaticStrength: 0.0,
+    signalLossStrength: 0.0,
+    colorDistortionAmount: 1.0,
+    blockSize: 15.0,
+    horizontalStripeSize: 30.0,
+    horrorColorGradingAmount: 0.02,
+  },
 };
 
 // Store dispose functions for cleanup
 const activeEffects = new Map();
 
-/**
- * Initialize effects on elements with kxxxr classes
- */
+// (lightweight debug UI removed)
+
 function initKxxxrEffects() {
-  // Find all elements with kxxxr classes
   const rippleElements = document.querySelectorAll(".kxxxr-ripple");
   const realisticElements = document.querySelectorAll(".kxxxr-realistic");
+  const glitchElements = document.querySelectorAll(".kxxxr-glitch");
+  const fluidElements = document.querySelectorAll(".kxxxr-fluid");
 
-  // Initialize ripple effects
-  rippleElements.forEach((element, index) => {
-    initRippleEffect(element, index);
-  });
-
-  // Initialize realistic effects
-  realisticElements.forEach((element, index) => {
-    initRealisticEffect(element, index);
-  });
+  rippleElements.forEach((el, i) => initRippleEffect(el, i));
+  realisticElements.forEach((el, i) => initRealisticEffect(el, i));
+  glitchElements.forEach((el, i) => initGlitchEffect(el, i));
+  fluidElements.forEach((el, i) => initFluidEffect(el, i));
 }
 
-/**
- * Initialize ripple effect on element
- */
 function initRippleEffect(element, index) {
   const imageUrl = getImageUrl(element);
   if (!imageUrl) {
@@ -69,26 +87,29 @@ function initRippleEffect(element, index) {
     return;
   }
 
-  // Create canvas
   const canvas = createCanvas(element);
   if (!canvas) return;
 
-  // Get custom config from data attributes
   const config = getConfigFromAttributes(element, "ripple");
 
-  // Initialize effect
-  const dispose = waterHoverEffect(canvas, {
+  let dispose = waterHoverEffect(canvas, {
     imageUrl,
     ...config,
   });
 
-  // Store for cleanup
   activeEffects.set(element, dispose);
+
+  if (config && config.debug === true) {
+    let currentOptions = { ...config };
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = waterHoverEffect(canvas, { imageUrl, ...currentOptions });
+      activeEffects.set(element, dispose);
+    };
+    createDatGuiForProgrammatic("ripple", currentOptions, recreate);
+  }
 }
 
-/**
- * Initialize realistic effect on element
- */
 function initRealisticEffect(element, index) {
   const imageUrl = getImageUrl(element);
   if (!imageUrl) {
@@ -100,18 +121,12 @@ function initRealisticEffect(element, index) {
     return;
   }
 
-  // Create canvas
   const canvas = createCanvas(element);
   if (!canvas) return;
-
-  // Get element dimensions
   const rect = element.getBoundingClientRect();
-
-  // Get custom config from data attributes
   const config = getConfigFromAttributes(element, "realistic");
 
-  // Initialize effect with balanced resolution for smooth but fast performance
-  const dispose = realisticEffect(canvas, {
+  let dispose = realisticEffect(canvas, {
     imageUrl,
     width: Math.min(rect.width || 400, 384),
     height: Math.min(rect.height || 300, 288),
@@ -119,8 +134,150 @@ function initRealisticEffect(element, index) {
     ...config,
   });
 
-  // Store for cleanup
   activeEffects.set(element, dispose);
+
+  if (config && config.debug === true) {
+    let currentOptions = { ...config };
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = realisticEffect(canvas, {
+        imageUrl,
+        width: Math.min(rect.width || 400, 384),
+        height: Math.min(rect.height || 300, 288),
+        ...mapAdvancedFilterConfig(currentOptions),
+        ...currentOptions,
+      });
+      activeEffects.set(element, dispose);
+    };
+    createDatGuiForProgrammatic("realistic", currentOptions, recreate);
+  }
+}
+
+function initGlitchEffect(element, index) {
+  const config = getConfigFromAttributes(element, "glitch");
+
+  if (element.tagName.toLowerCase() === "video") {
+    const videoElement = element;
+    const initVideo = () => {
+      const canvas = document.createElement("canvas");
+      const rect = videoElement.getBoundingClientRect();
+      const w = videoElement.videoWidth || rect.width || 640;
+      const h = videoElement.videoHeight || rect.height || 480;
+      canvas.width = w;
+      canvas.height = h;
+      canvas.style.width = videoElement.style.width || "100%";
+      canvas.style.height = videoElement.style.height || "100%";
+      canvas.style.display = "block";
+      canvas.style.objectFit = videoElement.style.objectFit || "cover";
+      const styles = window.getComputedStyle(videoElement);
+      canvas.style.borderRadius = styles.borderRadius;
+      canvas.style.border = styles.border;
+      canvas.style.boxShadow = styles.boxShadow;
+      videoElement.style.position = "absolute";
+      videoElement.style.opacity = "0";
+      videoElement.style.pointerEvents = "none";
+      videoElement.style.width = "1px";
+      videoElement.style.height = "1px";
+      videoElement.parentNode.insertBefore(canvas, videoElement);
+
+      let dispose = glitchEffect(canvas, { videoElement, ...config });
+      activeEffects.set(element, dispose);
+
+      if (config && config.debug === true) {
+        let currentOptions = { ...config };
+        const recreate = () => {
+          if (dispose) dispose();
+          dispose = glitchEffect(canvas, { videoElement, ...currentOptions });
+          activeEffects.set(element, dispose);
+        };
+        createDatGuiForProgrammatic("glitch", currentOptions, recreate);
+      }
+    };
+
+    if (videoElement.readyState >= 2) {
+      initVideo();
+    } else {
+      videoElement.addEventListener("loadedmetadata", initVideo, {
+        once: true,
+      });
+      videoElement.addEventListener(
+        "loadeddata",
+        () => {
+          if (!activeEffects.has(element)) initVideo();
+        },
+        { once: true }
+      );
+    }
+  } else {
+    const imageUrl = getImageUrl(element);
+    if (!imageUrl) {
+      console.warn(`kxxxr-glitch: No image found for element ${index}`);
+      return;
+    }
+    const canvas = createCanvas(element);
+    if (!canvas) return;
+    let dispose = glitchEffect(canvas, { imageUrl, ...config });
+    activeEffects.set(element, dispose);
+
+    if (config && config.debug === true) {
+      let currentOptions = { ...config };
+      const recreate = () => {
+        if (dispose) dispose();
+        dispose = glitchEffect(canvas, { imageUrl, ...currentOptions });
+        activeEffects.set(element, dispose);
+      };
+      createDatGuiForProgrammatic("glitch", currentOptions, recreate);
+    }
+  }
+}
+
+/** Duplicate removed **/
+
+function initFluidEffect(element, index) {
+  const imageUrl = getImageUrl(element);
+  if (!imageUrl) {
+    console.warn(`kxxxr-fluid: No image found for element ${index}. Please add an image using:
+    - src attribute (for img elements)
+    - background-image CSS property
+    - data-src attribute
+    - data-image attribute`);
+    return;
+  }
+  const canvas = createCanvas(element);
+  if (!canvas) return;
+  const rect = element.getBoundingClientRect();
+  const config = getConfigFromAttributes(element, "fluid");
+  const backImageUrl =
+    element.getAttribute("data-back") ||
+    element.getAttribute("data-back-image") ||
+    (element.dataset
+      ? element.dataset.back || element.dataset.backImage
+      : null);
+
+  let dispose = fluidEffect(canvas, {
+    imageUrl,
+    backImageUrl,
+    width: rect.width || 512,
+    height: rect.height || 384,
+    ...config,
+  });
+  activeEffects.set(element, dispose);
+
+  if (config && config.debug === true) {
+    let currentOptions = { ...config };
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = fluidEffect(canvas, {
+        imageUrl,
+        backImageUrl,
+        width: rect.width || 512,
+        height: rect.height || 384,
+        ...currentOptions,
+      });
+      activeEffects.set(element, dispose);
+    };
+    createDatGuiForProgrammatic("fluid", currentOptions, recreate);
+  }
 }
 
 /**
@@ -424,8 +581,17 @@ function createCanvas(element) {
   canvas.height = height;
 
   // Set CSS size to match original element
-  canvas.style.width = width + "px";
-  canvas.style.height = height + "px";
+  // Preserve responsive sizing if the original element used percentages or viewport units
+  const inlineWidth =
+    element.style && element.style.width ? element.style.width.trim() : "";
+  const inlineHeight =
+    element.style && element.style.height ? element.style.height.trim() : "";
+  const isResponsiveWidth = /%|vw|vh|vmin|vmax|auto/i.test(inlineWidth);
+  const isResponsiveHeight = /%|vw|vh|vmin|vmax|auto/i.test(inlineHeight);
+  canvas.style.width =
+    isResponsiveWidth && inlineWidth ? inlineWidth : width + "px";
+  canvas.style.height =
+    isResponsiveHeight && inlineHeight ? inlineHeight : height + "px";
   canvas.style.display = "block";
 
   // Preserve original styling
@@ -462,8 +628,12 @@ function getConfigFromAttributes(element, effectType) {
       }
     }
     if (value !== null) {
+      // Handle boolean values
+      if (value === "true" || value === "false") {
+        config[key] = value === "true";
+      }
       // Color strings (#rrggbb or rgb/rgba) should remain strings
-      if (/^#|^rgb\(/i.test(value)) {
+      else if (/^#|^rgb\(/i.test(value)) {
         config[key] = value;
       } else {
         const numValue = parseFloat(value);
@@ -472,6 +642,9 @@ function getConfigFromAttributes(element, effectType) {
     }
   });
 
+  // Debug flag via data-debug
+  const dbg = element.getAttribute("data-debug");
+  if (dbg === "true") config.debug = true;
   return config;
 }
 
@@ -537,6 +710,67 @@ function mapAdvancedFilterConfig(c) {
   return out;
 }
 
+// Helpers: dat.gui debug for programmatic API (only if CDN dat.gui is present)
+function createDatGuiForProgrammatic(effectType, optionsRef, recreate) {
+  if (typeof window === "undefined" || !window.dat || !window.dat.GUI)
+    return null;
+  if (optionsRef && optionsRef.__gui) return optionsRef.__gui;
+  const gui = new window.dat.GUI({ name: `kxxxr ${effectType}` });
+  const addNum = (obj, key, min, max, step) =>
+    gui.add(obj, key, min, max).step(step).onChange(recreate);
+  const addBool = (obj, key) => gui.add(obj, key).onChange(recreate);
+
+  if (effectType === "ripple") {
+    addNum(optionsRef, "strength", 0, 1.5, 0.01);
+    addNum(optionsRef, "radius", 0.05, 1, 0.01);
+    addNum(optionsRef, "pulseSpeed", 0, 5, 0.1);
+    addNum(optionsRef, "decay", 0.1, 5, 0.1);
+    addNum(optionsRef, "frequency", 1, 60, 1);
+  }
+  if (effectType === "realistic") {
+    addNum(optionsRef, "simulationSpeed", 0.1, 5, 0.1);
+    addNum(optionsRef, "effectRadius", 1, 120, 1);
+    addNum(optionsRef, "headStrength", 0, 2, 0.05);
+    addNum(optionsRef, "tailStrength", 0, 2, 0.05);
+    addNum(optionsRef, "tailWidth", 1, 120, 1);
+    addNum(optionsRef, "reflectionIntensity", 0, 2, 0.05);
+    addNum(optionsRef, "contrast", 0, 2, 0.05);
+    addNum(optionsRef, "saturation", 0, 2, 0.05);
+    addNum(optionsRef, "brightness", 0, 3, 0.05);
+    addNum(optionsRef, "shadowIntensity", -1, 1, 0.05);
+  }
+  if (effectType === "glitch") {
+    addNum(optionsRef, "speed", 0, 60, 0.1);
+    addNum(optionsRef, "intensity", 0, 2, 0.05);
+    addNum(optionsRef, "chromaShift", 0, 10, 0.1);
+    addNum(optionsRef, "displacement", 0, 0.2, 0.005);
+    addNum(optionsRef, "noiseAmount", 0, 1, 0.05);
+    addNum(optionsRef, "scanlineIntensity", 0, 1, 0.05);
+    addNum(optionsRef, "glitchFrequency", 0, 1, 0.01);
+    addNum(optionsRef, "blockSize", 1, 60, 1);
+    addNum(optionsRef, "horizontalStripeSize", 1, 60, 1);
+    addBool(optionsRef, "horrorMode");
+    addBool(optionsRef, "enableWarping");
+    addNum(optionsRef, "warpingAmount", 0, 1, 0.01);
+    addNum(optionsRef, "vignette", 0, 2, 0.01);
+    addNum(optionsRef, "edgeChromaticStrength", 0, 1, 0.01);
+    addNum(optionsRef, "signalLossStrength", 0, 1, 0.01);
+    addNum(optionsRef, "colorDistortionAmount", 0, 1, 0.01);
+    addNum(optionsRef, "horrorColorGradingAmount", 0, 1, 0.01);
+  }
+  if (effectType === "fluid") {
+    addNum(optionsRef, "speed", 0.1, 20, 0.1);
+    addNum(optionsRef, "lineWidth", 0.001, 0.2, 0.001);
+    addNum(optionsRef, "lineIntensity", 0, 1, 0.01);
+    addNum(optionsRef, "decay", 0.5, 0.999, 0.001);
+    addNum(optionsRef, "threshold", 0, 0.2, 0.001);
+    addNum(optionsRef, "edgeWidth", 0, 0.02, 0.0005);
+  }
+
+  optionsRef.__gui = gui;
+  return gui;
+}
+
 // Simple API functions for easy usage
 function rippleEffect(selector, options = {}) {
   const elements =
@@ -555,11 +789,18 @@ function rippleEffect(selector, options = {}) {
     const canvas = createCanvas(element);
     if (!canvas) return;
 
-    const config = { ...DEFAULT_CONFIGS.ripple, ...options };
-    const dispose = waterHoverEffect(canvas, {
-      imageUrl,
-      ...config,
-    });
+    let currentOptions = { ...DEFAULT_CONFIGS.ripple, ...options };
+    let dispose = waterHoverEffect(canvas, { imageUrl, ...currentOptions });
+
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = waterHoverEffect(canvas, { imageUrl, ...currentOptions });
+      activeEffects.set(element, dispose);
+    };
+
+    if (options && options.debug === true) {
+      createDatGuiForProgrammatic("ripple", currentOptions, recreate);
+    }
 
     disposes.push(dispose);
     activeEffects.set(element, dispose);
@@ -586,20 +827,115 @@ function realisticEffectSimple(selector, options = {}) {
     if (!canvas) return;
 
     const rect = element.getBoundingClientRect();
-    const config = { ...DEFAULT_CONFIGS.realistic, ...options };
+    let currentOptions = { ...DEFAULT_CONFIGS.realistic, ...options };
 
-    const dispose = realisticEffect(canvas, {
+    let dispose = realisticEffect(canvas, {
       imageUrl,
       width: Math.min(rect.width || 400, 384),
       height: Math.min(rect.height || 300, 288),
-      ...mapAdvancedFilterConfig(config),
-      ...config,
+      ...mapAdvancedFilterConfig(currentOptions),
+      ...currentOptions,
     });
+
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = realisticEffect(canvas, {
+        imageUrl,
+        width: Math.min(rect.width || 400, 384),
+        height: Math.min(rect.height || 300, 288),
+        ...mapAdvancedFilterConfig(currentOptions),
+        ...currentOptions,
+      });
+      activeEffects.set(element, dispose);
+    };
+
+    if (options && options.debug === true) {
+      createDatGuiForProgrammatic("realistic", currentOptions, recreate);
+    }
 
     disposes.push(dispose);
     activeEffects.set(element, dispose);
   });
 
+  return () => disposes.forEach((dispose) => dispose());
+}
+
+function glitchEffectSimple(selector, options = {}) {
+  const elements =
+    typeof selector === "string"
+      ? document.querySelectorAll(selector)
+      : [selector];
+  const disposes = [];
+  elements.forEach((element) => {
+    const imageUrl = getImageUrl(element);
+    if (!imageUrl) {
+      console.warn("kxxxr.glitchEffect: No image found for element");
+      return;
+    }
+    const canvas = createCanvas(element);
+    if (!canvas) return;
+    let currentOptions = { ...DEFAULT_CONFIGS.glitch, ...options };
+    let dispose = glitchEffect(canvas, { imageUrl, ...currentOptions });
+
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = glitchEffect(canvas, { imageUrl, ...currentOptions });
+      activeEffects.set(element, dispose);
+    };
+
+    if (options && options.debug === true) {
+      createDatGuiForProgrammatic("glitch", currentOptions, recreate);
+    }
+
+    disposes.push(dispose);
+    activeEffects.set(element, dispose);
+  });
+  return () => disposes.forEach((dispose) => dispose());
+}
+
+function fluidEffectSimple(selector, options = {}) {
+  const elements =
+    typeof selector === "string"
+      ? document.querySelectorAll(selector)
+      : [selector];
+  const disposes = [];
+  elements.forEach((element) => {
+    const imageUrl = getImageUrl(element);
+    if (!imageUrl) {
+      console.warn("kxxxr.fluidEffect: No image found for element");
+      return;
+    }
+    const canvas = createCanvas(element);
+    if (!canvas) return;
+    const rect = element.getBoundingClientRect();
+    let currentOptions = { ...DEFAULT_CONFIGS.fluid, ...options };
+    let dispose = fluidEffect(canvas, {
+      imageUrl,
+      backImageUrl: options.backImageUrl,
+      width: rect.width || 512,
+      height: rect.height || 384,
+      ...currentOptions,
+    });
+
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = fluidEffect(canvas, {
+        imageUrl,
+        backImageUrl: options.backImageUrl,
+        width: rect.width || 512,
+        height: rect.height || 384,
+        ...currentOptions,
+      });
+      activeEffects.set(element, dispose);
+    };
+
+    if (options && options.debug === true) {
+      createDatGuiForProgrammatic("fluid", currentOptions, recreate);
+    }
+
+    disposes.push(dispose);
+    activeEffects.set(element, dispose);
+  });
   return () => disposes.forEach((dispose) => dispose());
 }
 
@@ -612,10 +948,14 @@ if (typeof window !== "undefined") {
     // Simple API methods
     rippleEffect,
     realisticEffect: realisticEffectSimple,
+    glitchEffect: glitchEffectSimple,
+    fluidEffect: fluidEffectSimple,
     // Legacy methods
     effects: {
       ripple: waterHoverEffect,
       realistic: realisticEffect,
+      glitch: glitchEffect,
+      fluid: fluidEffect,
     },
   };
 }

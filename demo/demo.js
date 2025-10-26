@@ -2,6 +2,8 @@
 import {
   waterHoverEffect,
   realisticWaterHoverEffect,
+  fluidSimulationEffect,
+  glitchEffect,
 } from "../dist/kxxxr.esm.js";
 
 let currentDispose = null;
@@ -13,6 +15,276 @@ const effectLabel = document.getElementById("effectLabel");
 const realisticCanvas = document.getElementById("realisticCanvas");
 const customSvg = document.getElementById("customSvg");
 const customDiv = document.getElementById("customDiv");
+
+// Shared GUI for demo
+let demoGui = null;
+let demoGuiFolder = null;
+function getDatGlobal() {
+  if (typeof window !== "undefined" && window.dat) return window.dat;
+  if (typeof globalThis !== "undefined" && globalThis.dat)
+    return globalThis.dat;
+  return undefined;
+}
+function buildDemoGui(title, elementName, buildControlsCb) {
+  const datGlobal = getDatGlobal();
+  if (!datGlobal || !datGlobal.GUI) return;
+  if (!demoGui)
+    demoGui = new datGlobal.GUI({ name: "kxxxr.js Controls", width: 320 });
+  if (demoGuiFolder) {
+    demoGui.removeFolder(demoGuiFolder);
+    demoGuiFolder = null;
+  }
+  demoGuiFolder = demoGui.addFolder(`${title} (${elementName})`);
+  demoGuiFolder.open();
+  buildControlsCb(demoGuiFolder);
+}
+
+// Expose simple debug-enabled wrapper API on window.kxxxr
+(function exposeKxxxrAPI() {
+  const g = typeof window !== "undefined" ? window : globalThis;
+  g.kxxxr = g.kxxxr || {};
+
+  function ensureCanvas(target) {
+    if (target instanceof HTMLCanvasElement) return target;
+    let parent = document.body;
+    if (typeof target === "string") {
+      const el = document.querySelector(target);
+      if (el) parent = el;
+    } else if (target && target.nodeType === 1) {
+      parent = target;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.style.display = "block";
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+    parent.appendChild(canvas);
+    return canvas;
+  }
+
+  function makeGuiFolder(name) {
+    const datGlobal =
+      typeof window !== "undefined" && window.dat
+        ? window.dat
+        : typeof globalThis !== "undefined"
+        ? globalThis.dat
+        : undefined;
+    if (!datGlobal || !datGlobal.GUI) {
+      console.warn(
+        "dat.GUI not found. Include dat.gui before using debug controls."
+      );
+      return {
+        gui: null,
+        folder: { add: () => ({ onChange: () => {} }), open: () => {} },
+      };
+    }
+    const gui = new datGlobal.GUI({ name: `kxxxr — ${name}`, width: 320 });
+    const folder = gui.addFolder(name);
+    folder.open();
+    return { gui, folder };
+  }
+
+  g.kxxxr.rippleEffect = function (target, opts = {}) {
+    const canvas = ensureCanvas(target);
+    let options = {
+      imageUrl: opts.imageUrl,
+      strength: opts.strength ?? 0.08,
+      radius: opts.radius ?? 0.3,
+      pulseSpeed: opts.pulseSpeed ?? 2.0,
+      decay: opts.decay ?? 2.5,
+      frequency: opts.frequency ?? 20,
+    };
+    let dispose = waterHoverEffect(canvas, options);
+    let gui;
+    if (opts.debug) {
+      const g = makeGuiFolder("Ripple");
+      gui = g.gui;
+      const s = {
+        strength: options.strength,
+        radius: options.radius,
+        pulseSpeed: options.pulseSpeed,
+        decay: options.decay,
+        frequency: options.frequency,
+      };
+      g.folder.add(s, "strength", 0.0, 0.3, 0.005).onChange(reinit);
+      g.folder.add(s, "radius", 0.05, 1.0, 0.01).onChange(reinit);
+      g.folder.add(s, "pulseSpeed", 0.0, 5.0, 0.05).onChange(reinit);
+      g.folder.add(s, "decay", 0.5, 6.0, 0.1).onChange(reinit);
+      g.folder.add(s, "frequency", 1, 60, 1).onChange(reinit);
+      function reinit() {
+        options = { ...options, ...s };
+        if (dispose) dispose();
+        dispose = waterHoverEffect(canvas, options);
+      }
+    }
+    return function () {
+      if (dispose) dispose();
+      if (gui) gui.destroy();
+    };
+  };
+
+  g.kxxxr.realisticEffect = function (target, opts = {}) {
+    const canvas = ensureCanvas(target);
+    let options = {
+      imageUrl: opts.imageUrl,
+      simulationSpeed: opts.simulationSpeed ?? 1.4,
+      effectRadius: opts.effectRadius ?? 25,
+      headStrength: opts.headStrength ?? 0.7,
+      tailStrength: opts.tailStrength ?? 0.6,
+      tailWidth: opts.tailWidth ?? 20,
+    };
+    let dispose = realisticWaterHoverEffect(canvas, options);
+    let gui;
+    if (opts.debug) {
+      const g = makeGuiFolder("Realistic");
+      gui = g.gui;
+      const s = {
+        simulationSpeed: options.simulationSpeed,
+        effectRadius: options.effectRadius,
+        headStrength: options.headStrength,
+        tailStrength: options.tailStrength,
+        tailWidth: options.tailWidth,
+      };
+      g.folder.add(s, "simulationSpeed", 0.2, 3.0, 0.05).onChange(reinit);
+      g.folder.add(s, "effectRadius", 5, 80, 1).onChange(reinit);
+      g.folder.add(s, "headStrength", 0.0, 2.0, 0.05).onChange(reinit);
+      g.folder.add(s, "tailStrength", 0.0, 2.0, 0.05).onChange(reinit);
+      g.folder.add(s, "tailWidth", 1, 80, 1).onChange(reinit);
+      function reinit() {
+        options = { ...options, ...s };
+        if (dispose) dispose();
+        dispose = realisticWaterHoverEffect(canvas, options);
+      }
+    }
+    return function () {
+      if (dispose) dispose();
+      if (gui) gui.destroy();
+    };
+  };
+
+  g.kxxxr.fluidEffect = function (target, opts = {}) {
+    const canvas = ensureCanvas(target);
+    let options = {
+      imageUrl: opts.imageUrl,
+      backImageUrl: opts.backImageUrl,
+      speed: opts.speed ?? 7.0,
+      radius: opts.radius ?? 5,
+      maskDecay: opts.maskDecay ?? 0.9,
+      lineWidth: opts.lineWidth ?? 0.07,
+      lineIntensity: opts.lineIntensity ?? 0.5,
+    };
+    let dispose = fluidSimulationEffect(canvas, options);
+    let gui;
+    if (opts.debug) {
+      const g = makeGuiFolder("Fluid");
+      gui = g.gui;
+      const s = {
+        speed: options.speed,
+        radius: options.radius,
+        maskDecay: options.maskDecay,
+        lineWidth: options.lineWidth,
+        lineIntensity: options.lineIntensity,
+      };
+      g.folder.add(s, "speed", 0.5, 20.0, 0.1).onChange(reinit);
+      g.folder.add(s, "radius", 1, 50, 1).onChange(reinit);
+      g.folder.add(s, "maskDecay", 0.5, 0.99, 0.01).onChange(reinit);
+      g.folder.add(s, "lineWidth", 0.01, 0.2, 0.005).onChange(reinit);
+      g.folder.add(s, "lineIntensity", 0.0, 1.0, 0.05).onChange(reinit);
+      function reinit() {
+        options = { ...options, ...s };
+        if (dispose) dispose();
+        dispose = fluidSimulationEffect(canvas, options);
+      }
+    }
+    return function () {
+      if (dispose) dispose();
+      if (gui) gui.destroy();
+    };
+  };
+
+  g.kxxxr.glitchEffect = function (target, opts = {}) {
+    const canvas = ensureCanvas(target);
+    let options = { ...opts };
+    let dispose = glitchEffect(canvas, options);
+    let gui;
+    if (opts.debug) {
+      const g = makeGuiFolder("Glitch");
+      gui = g.gui;
+      const s = {
+        intensity: opts.intensity ?? 1.0,
+        chromaShift: opts.chromaShift ?? 5.0,
+        displacement: opts.displacement ?? 0.08,
+        noiseAmount: opts.noiseAmount ?? 0.0,
+        scanlineIntensity: opts.scanlineIntensity ?? 0.4,
+        glitchFrequency: opts.glitchFrequency ?? 0.5,
+        blockSize: opts.blockSize ?? 20.0,
+        horizontalStripeSize: opts.horizontalStripeSize ?? 20.0,
+        enableWarping: opts.enableWarping ?? true,
+        speed: opts.speed ?? 15.2,
+      };
+      g.folder.add(s, "intensity", 0.0, 1.5, 0.05).onChange(reinit);
+      g.folder.add(s, "chromaShift", 0.0, 10.0, 0.1).onChange(reinit);
+      g.folder.add(s, "displacement", 0.0, 0.2, 0.005).onChange(reinit);
+      g.folder.add(s, "noiseAmount", 0.0, 1.0, 0.05).onChange(reinit);
+      g.folder.add(s, "scanlineIntensity", 0.0, 1.0, 0.05).onChange(reinit);
+      g.folder.add(s, "glitchFrequency", 0.0, 1.0, 0.01).onChange(reinit);
+      g.folder.add(s, "blockSize", 1, 60, 1).onChange(reinit);
+      g.folder.add(s, "horizontalStripeSize", 1, 60, 1).onChange(reinit);
+      g.folder.add(s, "enableWarping").onChange(reinit);
+      g.folder.add(s, "speed", 0.0, 60.0, 0.5).onChange(reinit);
+      function reinit() {
+        options = { ...options, ...s };
+        if (dispose) dispose();
+        dispose = glitchEffect(canvas, options);
+      }
+    }
+    return function () {
+      if (dispose) dispose();
+      if (gui) gui.destroy();
+    };
+  };
+})();
+
+// Utility: reset elementSelect options based on effect
+window.setElementOptionsForEffect = function (effectType) {
+  // Helper to rebuild options
+  function setOptions(options, disable) {
+    // clear
+    while (elementSelect.firstChild)
+      elementSelect.removeChild(elementSelect.firstChild);
+    // add
+    for (const { value, label } of options) {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label;
+      elementSelect.appendChild(opt);
+    }
+    elementSelect.disabled = !!disable;
+  }
+
+  if (effectType === "fluidSimulation") {
+    // Fluid is image-only, no element change option
+    setOptions([{ value: "image", label: "Image" }], true);
+  } else if (effectType === "glitch") {
+    // Glitch: allow Image and Video, no SVG/Div
+    setOptions(
+      [
+        { value: "image", label: "Image" },
+        { value: "video", label: "Video" },
+      ],
+      false
+    );
+  } else {
+    // Ripple/Realistic: Image, SVG, Div
+    setOptions(
+      [
+        { value: "image", label: "Image" },
+        { value: "svg", label: "SVG" },
+        { value: "div", label: "Div" },
+      ],
+      false
+    );
+  }
+};
 
 // Function to convert element to data URL
 function elementToDataURL(element) {
@@ -94,6 +366,17 @@ async function showEffect(effectType, elementType) {
   customSvg.style.display = "none";
   customDiv.style.display = "none";
 
+  // Ensure element options conform to the effect's constraints
+  setElementOptionsForEffect(effectType);
+  // Snap value to first option if current value is invalid
+  if (![...elementSelect.options].some((o) => o.value === elementType)) {
+    elementType = elementSelect.options[0].value;
+  }
+  // Ensure the UI reflects the effective elementType
+  if (elementSelect.value !== elementType) {
+    elementSelect.value = elementType;
+  }
+
   let imageUrl = elementSources[elementType];
 
   // Convert custom elements to data URL
@@ -117,10 +400,13 @@ async function showEffect(effectType, elementType) {
     imageUrl = elementSources.div;
   }
 
-  const effectName =
-    effectType === "ripple"
-      ? "water hover effect"
-      : "realistic water hover effect";
+  let effectName = "water hover effect";
+  if (effectType === "ripple") effectName = "water hover effect";
+  else if (effectType === "realistic")
+    effectName = "realistic water hover effect";
+  else if (effectType === "fluidSimulation")
+    effectName = "fluid simulation effect";
+  else if (effectType === "glitch") effectName = "glitch effect";
   const elementName =
     elementType.charAt(0).toUpperCase() + elementType.slice(1);
 
@@ -128,13 +414,31 @@ async function showEffect(effectType, elementType) {
 
   if (effectType === "ripple") {
     demoCanvas.style.display = "block";
-    currentDispose = waterHoverEffect(demoCanvas, {
-      imageUrl: imageUrl,
+    const state = {
       strength: 0.08,
       radius: 0.3,
       pulseSpeed: 2.0,
       decay: 2.5,
       frequency: 20,
+    };
+    const apply = () => {
+      if (currentDispose) currentDispose();
+      currentDispose = waterHoverEffect(demoCanvas, {
+        imageUrl: imageUrl,
+        strength: state.strength,
+        radius: state.radius,
+        pulseSpeed: state.pulseSpeed,
+        decay: state.decay,
+        frequency: state.frequency,
+      });
+    };
+    apply();
+    buildDemoGui("Ripple", elementName, (f) => {
+      f.add(state, "strength", 0.0, 0.3, 0.005).onChange(apply);
+      f.add(state, "radius", 0.05, 1.0, 0.01).onChange(apply);
+      f.add(state, "pulseSpeed", 0.0, 5.0, 0.05).onChange(apply);
+      f.add(state, "decay", 0.5, 6.0, 0.1).onChange(apply);
+      f.add(state, "frequency", 1, 60, 1).onChange(apply);
     });
   } else if (effectType === "realistic") {
     realisticCanvas.style.display = "block";
@@ -145,19 +449,272 @@ async function showEffect(effectType, elementType) {
         : imageUrl;
 
     try {
-      currentDispose = realisticWaterHoverEffect(realisticCanvas, {
-        imageUrl: realisticImageUrl,
-        // width: 400,
-        // height: 300,
+      const state = {
+        width: realisticCanvas.clientWidth || 512,
+        height: realisticCanvas.clientHeight || 384,
         simulationSpeed: 1.4,
         effectRadius: 25,
         headStrength: 0.7,
         tailStrength: 0.6,
         tailWidth: 20,
+        reflectionIntensity: 0.5,
+        reflectionColor: "#ffffff",
+        contrast: 0.65,
+        saturation: 0.9,
+        brightness: 1.3,
+        tint: "#ffffff",
+        shadowIntensity: -0.28,
+      };
+      const apply = () => {
+        if (currentDispose) currentDispose();
+        currentDispose = realisticWaterHoverEffect(realisticCanvas, {
+          imageUrl: realisticImageUrl,
+          width: state.width,
+          height: state.height,
+          simulationSpeed: state.simulationSpeed,
+          effectRadius: state.effectRadius,
+          headStrength: state.headStrength,
+          tailStrength: state.tailStrength,
+          tailWidth: state.tailWidth,
+          reflectionIntensity: state.reflectionIntensity,
+          reflectionColor: state.reflectionColor,
+          contrast: state.contrast,
+          saturation: state.saturation,
+          brightness: state.brightness,
+          tint: state.tint,
+          shadowIntensity: state.shadowIntensity,
+        });
+      };
+      apply();
+      buildDemoGui("Realistic", elementName, (f) => {
+        f.add(state, "width", 128, 2048, 1).onChange(apply);
+        f.add(state, "height", 96, 1536, 1).onChange(apply);
+        f.add(state, "simulationSpeed", 0.2, 3.0, 0.05).onChange(apply);
+        f.add(state, "effectRadius", 5, 200, 1).onChange(apply);
+        f.add(state, "headStrength", 0.0, 3.0, 0.05).onChange(apply);
+        f.add(state, "tailStrength", 0.0, 3.0, 0.05).onChange(apply);
+        f.add(state, "tailWidth", 1, 200, 1).onChange(apply);
+        f.add(state, "reflectionIntensity", 0.0, 2.0, 0.01).onChange(apply);
+        f.addColor(state, "reflectionColor").onChange(apply);
+        f.add(state, "contrast", 0.0, 2.0, 0.01).onChange(apply);
+        f.add(state, "saturation", 0.0, 2.0, 0.01).onChange(apply);
+        f.add(state, "brightness", 0.0, 3.0, 0.01).onChange(apply);
+        f.addColor(state, "tint").onChange(apply);
+        f.add(state, "shadowIntensity", -1.0, 1.0, 0.01).onChange(apply);
       });
       console.log("Realistic effect initialized successfully");
     } catch (error) {
       console.error("Error initializing realistic effect:", error);
+    }
+  } else if (effectType === "fluidSimulation") {
+    demoCanvas.style.display = "block";
+    try {
+      const state = {
+        imageUrl:
+          "https://images.unsplash.com/photo-1709196138037-df0a4db8c93b?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1932",
+        backImageUrl: "./assets/fluid-bg.png",
+        width: demoCanvas.clientWidth || 800,
+        height: demoCanvas.clientHeight || 600,
+        speed: 7.0,
+        decay: 0.97,
+        lineWidth: 0.05,
+        lineIntensity: 0.3,
+        threshold: 0.02,
+        edgeWidth: 0.004,
+        hiDPI: true,
+        movementTimeout: 50,
+      };
+      const apply = () => {
+        if (currentDispose) currentDispose();
+        currentDispose = fluidSimulationEffect(demoCanvas, {
+          imageUrl: state.imageUrl,
+          backImageUrl: state.backImageUrl,
+          width: state.width,
+          height: state.height,
+          speed: state.speed,
+          decay: state.decay,
+          lineWidth: state.lineWidth,
+          lineIntensity: state.lineIntensity,
+          threshold: state.threshold,
+          edgeWidth: state.edgeWidth,
+          hiDPI: state.hiDPI,
+          movementTimeout: state.movementTimeout,
+        });
+      };
+      apply();
+      buildDemoGui("Fluid", elementName, (f) => {
+        f.add(state, "speed", 0.1, 20.0, 0.1).onChange(apply);
+        f.add(state, "decay", 0.8, 0.999, 0.001).onChange(apply);
+        f.add(state, "lineWidth", 0.005, 0.2, 0.001).onChange(apply);
+        f.add(state, "lineIntensity", 0.0, 1.0, 0.01).onChange(apply);
+        f.add(state, "threshold", 0.0, 0.2, 0.001).onChange(apply);
+        f.add(state, "edgeWidth", 0.0, 0.02, 0.0005).onChange(apply);
+        f.add(state, "width", 128, 2048, 1).onChange(apply);
+        f.add(state, "height", 96, 1536, 1).onChange(apply);
+        f.add(state, "hiDPI").onChange(apply);
+        f.add(state, "movementTimeout", 0, 2000, 10).onChange(apply);
+      });
+    } catch (e) {
+      console.error("Error initializing fluid simulation:", e);
+    }
+  } else if (effectType === "glitch") {
+    demoCanvas.style.display = "block";
+    try {
+      if (elementType === "video") {
+        // Prepare hidden video element for glitch effect
+        let glitchVideo = document.getElementById("glitchVideo");
+        if (!glitchVideo) {
+          glitchVideo = document.createElement("video");
+          glitchVideo.id = "glitchVideo";
+          glitchVideo.src = "./assets/Untitled design.mp4";
+          glitchVideo.crossOrigin = "anonymous";
+          glitchVideo.preload = "auto";
+          glitchVideo.autoplay = true;
+          glitchVideo.loop = true;
+          glitchVideo.muted = true;
+          glitchVideo.playsInline = true;
+          glitchVideo.style.display = "none";
+          document.body.appendChild(glitchVideo);
+          // Ensure playback starts
+          glitchVideo.play().catch(() => {});
+        }
+
+        const state = {
+          speed: 30.0,
+          intensity: 0.8,
+          chromaShift: 4.0,
+          displacement: 0.06,
+          noiseAmount: 0.1,
+          scanlineIntensity: 0.3,
+          glitchFrequency: 0.4,
+          horrorMode: true,
+          enableWarping: false,
+          warpingAmount: 0.3,
+          vignette: 0.0,
+          edgeChromaticStrength: 0.0,
+          signalLossStrength: 0.0,
+          colorDistortionAmount: 0.0,
+          blockSize: 15.0,
+          horizontalStripeSize: 5.0,
+          horrorColorGradingAmount: 1.0,
+        };
+        const apply = () => {
+          if (currentDispose) currentDispose();
+          currentDispose = glitchEffect(demoCanvas, {
+            videoElement: glitchVideo,
+            speed: state.speed,
+            intensity: state.intensity,
+            chromaShift: state.chromaShift,
+            displacement: state.displacement,
+            noiseAmount: state.noiseAmount,
+            scanlineIntensity: state.scanlineIntensity,
+            glitchFrequency: state.glitchFrequency,
+            horrorMode: state.horrorMode,
+            colorDistortionAmount: state.colorDistortionAmount,
+            vignette: state.vignette,
+            edgeChromaticStrength: state.edgeChromaticStrength,
+            signalLossStrength: state.signalLossStrength,
+            blockSize: state.blockSize,
+            horizontalStripeSize: state.horizontalStripeSize,
+            enableWarping: state.enableWarping,
+            warpingAmount: state.warpingAmount,
+            horrorColorGradingAmount: state.horrorColorGradingAmount,
+          });
+        };
+        apply();
+        buildDemoGui("Glitch (Video)", elementName, (f) => {
+          f.add(state, "speed", 0.0, 60.0, 0.5).onChange(apply);
+          f.add(state, "intensity", 0.0, 2.0, 0.05).onChange(apply);
+          f.add(state, "chromaShift", 0.0, 10.0, 0.1).onChange(apply);
+          f.add(state, "displacement", 0.0, 0.2, 0.005).onChange(apply);
+          f.add(state, "noiseAmount", 0.0, 1.0, 0.05).onChange(apply);
+          f.add(state, "scanlineIntensity", 0.0, 1.0, 0.05).onChange(apply);
+          f.add(state, "glitchFrequency", 0.0, 1.0, 0.01).onChange(apply);
+          f.add(state, "horrorMode").onChange(apply);
+          f.add(state, "blockSize", 1, 60, 1).onChange(apply);
+          f.add(state, "horizontalStripeSize", 1, 60, 1).onChange(apply);
+          f.add(state, "enableWarping").onChange(apply);
+          f.add(state, "warpingAmount", 0.0, 1.0, 0.01).onChange(apply);
+          f.add(state, "vignette", 0.0, 1.0, 0.01).onChange(apply);
+          f.add(state, "edgeChromaticStrength", 0.0, 1.0, 0.01).onChange(apply);
+          f.add(state, "signalLossStrength", 0.0, 1.0, 0.01).onChange(apply);
+          f.add(state, "colorDistortionAmount", 0.0, 2.0, 0.01).onChange(apply);
+          f.add(state, "horrorColorGradingAmount", 0.0, 2.0, 0.01).onChange(
+            apply
+          );
+        });
+      } else {
+        // Fallback to image config (not exposed in UI per requirement)
+        const glitchImageUrl =
+          "https://images.unsplash.com/photo-1760373899546-23db228c8a0d?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1470";
+        const state = {
+          imageUrl: glitchImageUrl,
+          speed: 15.2,
+          intensity: 1.0,
+          chromaShift: 5.0,
+          displacement: 0.08,
+          noiseAmount: 0.0,
+          scanlineIntensity: 0.4,
+          glitchFrequency: 0.5,
+          horrorMode: true,
+          enableWarping: true,
+          warpingAmount: 0.05,
+          vignette: 0.0,
+          edgeChromaticStrength: 0.0,
+          signalLossStrength: 0.0,
+          colorDistortionAmount: 0.0,
+          blockSize: 20.0,
+          horizontalStripeSize: 20.0,
+          horrorColorGradingAmount: 1.0,
+        };
+        const apply = () => {
+          if (currentDispose) currentDispose();
+          currentDispose = glitchEffect(demoCanvas, {
+            imageUrl: state.imageUrl,
+            speed: state.speed,
+            intensity: state.intensity,
+            chromaShift: state.chromaShift,
+            displacement: state.displacement,
+            noiseAmount: state.noiseAmount,
+            scanlineIntensity: state.scanlineIntensity,
+            glitchFrequency: state.glitchFrequency,
+            horrorMode: state.horrorMode,
+            colorDistortionAmount: state.colorDistortionAmount,
+            vignette: state.vignette,
+            edgeChromaticStrength: state.edgeChromaticStrength,
+            signalLossStrength: state.signalLossStrength,
+            blockSize: state.blockSize,
+            horizontalStripeSize: state.horizontalStripeSize,
+            enableWarping: state.enableWarping,
+            warpingAmount: state.warpingAmount,
+            horrorColorGradingAmount: state.horrorColorGradingAmount,
+          });
+        };
+        apply();
+        buildDemoGui("Glitch (Image)", elementName, (f) => {
+          f.add(state, "speed", 0.0, 60.0, 0.5).onChange(apply);
+          f.add(state, "intensity", 0.0, 2.0, 0.05).onChange(apply);
+          f.add(state, "chromaShift", 0.0, 10.0, 0.1).onChange(apply);
+          f.add(state, "displacement", 0.0, 0.2, 0.005).onChange(apply);
+          f.add(state, "noiseAmount", 0.0, 1.0, 0.05).onChange(apply);
+          f.add(state, "scanlineIntensity", 0.0, 1.0, 0.05).onChange(apply);
+          f.add(state, "glitchFrequency", 0.0, 1.0, 0.01).onChange(apply);
+          f.add(state, "horrorMode").onChange(apply);
+          f.add(state, "blockSize", 1, 60, 1).onChange(apply);
+          f.add(state, "horizontalStripeSize", 1, 60, 1).onChange(apply);
+          f.add(state, "enableWarping").onChange(apply);
+          f.add(state, "warpingAmount", 0.0, 0.2, 0.005).onChange(apply);
+          f.add(state, "vignette", 0.0, 1.0, 0.01).onChange(apply);
+          f.add(state, "edgeChromaticStrength", 0.0, 1.0, 0.01).onChange(apply);
+          f.add(state, "signalLossStrength", 0.0, 1.0, 0.01).onChange(apply);
+          f.add(state, "colorDistortionAmount", 0.0, 2.0, 0.01).onChange(apply);
+          f.add(state, "horrorColorGradingAmount", 0.0, 2.0, 0.01).onChange(
+            apply
+          );
+        });
+      }
+    } catch (e) {
+      console.error("Error initializing glitch effect:", e);
     }
   }
 }

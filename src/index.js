@@ -1,5 +1,7 @@
 export { waterHoverEffect } from "./effects/waterHover.js";
 export { realisticWaterHoverEffect } from "./effects/realisticWaterHover.js";
+export { glitchEffect } from "./effects/glitch.js";
+export { fluidSimulationEffect } from "./effects/fluidSimulation.js";
 
 // Export auto-initialization
 export {

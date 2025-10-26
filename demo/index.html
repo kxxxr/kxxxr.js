@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="shortcut icon" href="logoFavi.png" type="image/x-icon">
+    <link rel="shortcut icon" href="./assets/logoFavi.png" type="image/x-icon">
     <title>kxxxr.js</title>
   
     <style>
@@ -128,6 +128,98 @@
       text-align: center;
       margin-top: 20px;
       }
+
+      /* Controls - glass/transparent look */
+      #controlsBar {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.41), rgba(255,255,255,0.04));
+        border: 1px solid rgba(255,255,255,0.16);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      #controlsBar label {
+        font-size: 12px;
+        letter-spacing: 0.02em;
+        color: #111111;
+      }
+      .control-select {
+        appearance: none;
+        -webkit-appearance: none;
+        font-size: 12px;
+        color: #111111;
+        padding: 6px 28px 6px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.18);
+        background: rgba(255, 255, 255, 0.488);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        outline: none;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02), 0 4px 12px rgba(0,0,0,0.12);
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="%23111111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        background-size: 12px;
+      }
+      .control-select:hover {
+        border-color: rgba(0,0,0,0.35);
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1), 0 6px 18px rgba(0,0,0,0.18);
+      }
+      .control-select:focus {
+        border-color: #111111;
+        box-shadow: 0 0 0 2px rgba(17,17,17,0.15);
+      }
+      .control-select option {
+        color: #111111;
+        background-color: rgba(255, 255, 255, 0.129);
+      }
+      .control-select option:hover {
+        background-color: rgba(0,0,0,0.08);
+      }
+      .control-select option:checked,
+      .control-select option:focus {
+        background-color: rgba(0,240,255,0.20);
+        color: #111111;
+      }
+      .control-select optgroup {
+        background-color: rgba(255,255,255,0.5);
+        color: #111111;
+      }
+
+      /* Custom dropdown (fully stylable options) */
+      .custom-dropdown { position: relative; }
+      .cd-btn {
+        font-size: 12px;
+        color: #111111;
+        padding: 6px 28px 6px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.18);
+        background: rgba(255, 255, 255, 0.289);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        outline: none;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02), 0 4px 12px rgba(0,0,0,0.12);
+        cursor: pointer;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="%23111111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+        background-repeat: no-repeat; background-position: right 8px center; background-size: 12px;
+        min-width: 150px;
+      }
+      .cd-btn:hover { border-color: rgba(0,0,0,0.35); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1), 0 6px 18px rgba(0,0,0,0.18); }
+      .cd-menu {
+        position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+        background: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.55));
+        border: 1px solid rgba(0,0,0,0.18);
+        border-radius: 10px;
+        box-shadow: 0 12px 28px rgba(0,0,0,0.25);
+        backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        padding: 6px; display: none;
+        max-height: 220px; overflow: auto;
+        z-index: 50;
+      }
+      .cd-item {
+        font-size: 12px; color: #111111; padding: 8px 10px; border-radius: 6px; cursor: pointer;
+      }
+      .cd-item:hover { background: rgba(0,0,0,0.06); }
+      .cd-item.active { background: rgba(0,240,255,0.20); }
     </style>
   </head>
 
@@ -163,57 +255,43 @@
 
     <!-- Desktop Demo Section -->
     <div class="desktop-demo">
-  <div style="
+  <div id="controlsBar" style="
         position: fixed;
         top: 24px;
         left: 24px;
         z-index: 10;
-        background: rgba(0, 0, 0, 0.8);
-        padding: 12px;
-        border-radius: 8px;
-        backdrop-filter: blur(10px);
+        padding: 10px 18px;
+        border-radius: 6px;
         display: flex;
-        gap: 16px;
+        gap: 8px;
         align-items: center;
       ">
     <label for="effectSelect" style="
-          font-size: 14px;
-          margin-right: 8px;
-          color: #00f0ff;
+          font-size: 12px;
+          margin-right: 6px;
+          color: #000000;
           font-weight: 500;
         ">Effect:</label>
-    <select id="effectSelect" style="
-          font-size: 14px;
-          padding: 6px 12px;
-          border-radius: 6px;
-          background: #1a1a1a;
-          color: white;
-          border: 1px solid #333;
-          outline: none;
-        ">
+    <select id="effectSelect" class="control-select" style="display:none">
         <option value="ripple">Ripple Hover</option>
         <option value="realistic">Realistic Water Hover</option>
+        <option value="fluidSimulation">Fluid Simulation</option>
+        <option value="glitch">Glitch Effect</option>
       </select>
+    <div class="custom-dropdown" id="effectDropdown"></div>
 
     <label for="elementSelect" style="
-          font-size: 14px;
-          margin-right: 8px;
-          color: #00f0ff;
+          font-size: 12px;
+          margin-right: 6px;
+          color: #000000;
           font-weight: 500;
         ">Element:</label>
-    <select id="elementSelect" style="
-          font-size: 14px;
-          padding: 6px 12px;
-          border-radius: 6px;
-          background: #1a1a1a;
-          color: white;
-          border: 1px solid #333;
-          outline: none;
-        ">
+    <select id="elementSelect" class="control-select" style="display:none;">
       <option value="image">Image</option>
       <option value="svg">SVG</option>
       <option value="div">Div</option>
       </select>
+    <div class="custom-dropdown" id="elementDropdown"></div>
     </div>
     <div class="wrap">
       <canvas id="demoCanvas"></canvas>
@@ -247,18 +325,73 @@
        position: relative; display: flex; align-items: center; justify-content: center; ">
       <h1 class="text" style="color: #000; font-size: 10vw; font-weight: bold; margin-top: 50px;">kxxxr.js</h1>
     </div>
-    <div class="label">
-      kxxxr.js — <span id="effectLabel">water hover effect</span> • Move your
-      mouse to interact
+    <div class="label" style="display: flex; align-items: center; gap: 10px;">
+      <img class="logo" style="width: 15px; height: 15px;" src="./assets/LogoWhite.svg" />kxxxr.js — <span id="effectLabel">effect</span>
     </div>
 
       <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.9/build/dat.gui.min.js"></script>
+    <script>
+      // Ensure dat is available before module scripts
+      window.dat = window.dat || dat;
+    </script>
     <script type="importmap">
       {
         "imports": {
           "three": "https://unpkg.com/three@0.170.0/build/three.module.js"
         }
       }
+    </script>
+    <script>
+      // Build custom dropdowns from native selects
+      function initCustomDropdown(selectId, hostId) {
+        const select = document.getElementById(selectId);
+        const host = document.getElementById(hostId);
+        if (!select || !host) return;
+        host.innerHTML = '';
+        const btn = document.createElement('button');
+        btn.className = 'cd-btn';
+        btn.type = 'button';
+        btn.textContent = select.options[select.selectedIndex]?.text || '';
+        const menu = document.createElement('div');
+        menu.className = 'cd-menu';
+        for (const opt of select.options) {
+          const item = document.createElement('div');
+          item.className = 'cd-item' + (opt.selected ? ' active' : '');
+          item.textContent = opt.text;
+          item.dataset.value = opt.value;
+          item.addEventListener('click', () => {
+            select.value = opt.value;
+            select.dispatchEvent(new Event('change'));
+            btn.textContent = opt.text;
+            for (const c of menu.children) c.classList.remove('active');
+            item.classList.add('active');
+            menu.style.display = 'none';
+          });
+          menu.appendChild(item);
+        }
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpen = menu.style.display === 'block';
+          document.querySelectorAll('.cd-menu').forEach(el => el.style.display = 'none');
+          menu.style.display = isOpen ? 'none' : 'block';
+        });
+        document.addEventListener('click', () => { menu.style.display = 'none'; });
+        host.appendChild(btn);
+        host.appendChild(menu);
+      }
+      window.addEventListener('DOMContentLoaded', () => {
+        initCustomDropdown('effectSelect', 'effectDropdown');
+        initCustomDropdown('elementSelect', 'elementDropdown');
+        // Keep custom dropdowns in sync when we update element options dynamically
+        const origSetOptions = window.setElementOptionsForEffect;
+        if (typeof origSetOptions === 'function') {
+          window.setElementOptionsForEffect = function(effectType) {
+            origSetOptions(effectType);
+            initCustomDropdown('elementSelect', 'elementDropdown');
+          }
+        }
+      });
     </script>
     <script type="module" src="demo.js"></script>
     </div>

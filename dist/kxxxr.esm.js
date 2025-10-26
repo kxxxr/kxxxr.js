@@ -31033,6 +31033,57 @@ class Scene extends Object3D {
 
 }
 
+class VideoTexture extends Texture {
+
+	constructor( video, mapping, wrapS, wrapT, magFilter, minFilter, format, type, anisotropy ) {
+
+		super( video, mapping, wrapS, wrapT, magFilter, minFilter, format, type, anisotropy );
+
+		this.isVideoTexture = true;
+
+		this.minFilter = minFilter !== undefined ? minFilter : LinearFilter;
+		this.magFilter = magFilter !== undefined ? magFilter : LinearFilter;
+
+		this.generateMipmaps = false;
+
+		const scope = this;
+
+		function updateVideo() {
+
+			scope.needsUpdate = true;
+			video.requestVideoFrameCallback( updateVideo );
+
+		}
+
+		if ( 'requestVideoFrameCallback' in video ) {
+
+			video.requestVideoFrameCallback( updateVideo );
+
+		}
+
+	}
+
+	clone() {
+
+		return new this.constructor( this.image ).copy( this );
+
+	}
+
+	update() {
+
+		const video = this.image;
+		const hasVideoFrameCallback = 'requestVideoFrameCallback' in video;
+
+		if ( hasVideoFrameCallback === false && video.readyState >= video.HAVE_CURRENT_DATA ) {
+
+			this.needsUpdate = true;
+
+		}
+
+	}
+
+}
+
 const Cache = {
 
 	enabled: false,
@@ -32048,10 +32099,819 @@ function realisticWaterHoverEffect(canvas, options = {}) {
 }
 
 /**
- * Auto-initialize effects based on CSS classes
- * Usage: <img class="kxxxr-ripple" src="image.jpg" />
- *        <div class="kxxxr-realistic" style="background-image: url('image.jpg')"></div>
+ * Advanced Glitch Effect with dynamic distortions, chromatic aberration,
+ * block displacement, digital noise, scan artifacts, and horror elements.
+ * @param {HTMLCanvasElement} canvas
+ * @param {{ imageUrl?: string, videoElement?: HTMLVideoElement, speed?: number, intensity?: number, chromaShift?: number, displacement?: number, noiseAmount?: number, scanlineIntensity?: number, glitchFrequency?: number, horrorMode?: boolean, enableWarping?: boolean, warpingAmount?: number }} options
+ * @returns {() => void} dispose
  */
+function glitchEffect(canvas, options = {}) {
+  const {
+    imageUrl,
+    videoElement = null,
+    speed = 1.0,
+    intensity = 0.7,
+    chromaShift = 3.0,
+    displacement = 0.05,
+    noiseAmount = 0.15,
+    scanlineIntensity = 0.3,
+    glitchFrequency = 0.3,
+    horrorMode = false,
+    enableWarping = true,
+    warpingAmount = 0.3,
+    // New: control vignette strength (0 disables vignette)
+    vignette = 0.0,
+    // New: blend strength for edge chromatic effect (0 disables)
+    edgeChromaticStrength = 0.0,
+    // New: control strength of horror-mode signal loss black bands
+    signalLossStrength = 0.0,
+    // New: control color distortion effects (0 disables)
+    colorDistortionAmount = 0.0,
+    // New: control block/stripe sizes
+    blockSize = 15.0,
+    horizontalStripeSize = 30.0,
+    // New: control horror mode color grading (0 disables)
+    horrorColorGradingAmount = 1.0,
+  } = options;
+
+  if (!imageUrl && !videoElement) {
+    throw new Error("Either imageUrl or videoElement is required");
+  }
+
+  const renderer = new WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: false,
+    powerPreference: "high-performance",
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(
+    Math.max(1, canvas.clientWidth),
+    Math.max(1, canvas.clientHeight),
+    false
+  );
+  renderer.setClearColor(0x000000, 0);
+
+  let tex;
+  let isVideo = false;
+
+  if (videoElement) {
+    // Video texture
+    isVideo = true;
+
+    // Ensure video is playing
+    videoElement.play().catch((err) => {
+      console.warn("Video autoplay blocked:", err);
+    });
+
+    // Create video texture
+    tex = new VideoTexture(videoElement);
+    tex.colorSpace = SRGBColorSpace;
+    tex.minFilter = LinearFilter;
+    tex.magFilter = LinearFilter;
+    tex.format = RGBAFormat;
+    tex.generateMipmaps = false;
+    tex.needsUpdate = true;
+  } else {
+    // Image texture
+    const loader = new TextureLoader();
+    tex = loader.load(imageUrl);
+    tex.colorSpace = SRGBColorSpace;
+    tex.minFilter = LinearFilter;
+    tex.magFilter = LinearFilter;
+    tex.flipY = true;
+    tex.generateMipmaps = false;
+  }
+
+  const scene = new Scene();
+  const camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+  const uniforms = {
+    tDiffuse: { value: tex },
+    uTime: { value: 0 },
+    uIntensity: { value: intensity },
+    uChromaShift: { value: chromaShift },
+    uDisplacement: { value: displacement },
+    uNoise: { value: noiseAmount },
+    uScanline: { value: scanlineIntensity },
+    uGlitchFreq: { value: glitchFrequency },
+    uHorrorMode: { value: horrorMode ? 1.0 : 0.0 },
+    uEnableWarping: { value: enableWarping ? 1.0 : 0.0 },
+    uWarpingAmount: { value: warpingAmount },
+    uResolution: { value: new Vector2(canvas.width, canvas.height) },
+    uVignetteAmount: { value: vignette },
+    uEdgeChromaticStrength: { value: edgeChromaticStrength },
+    uSignalLossStrength: { value: signalLossStrength },
+    uColorDistortionAmount: { value: colorDistortionAmount },
+    uBlockSize: { value: blockSize },
+    uHorizontalStripeSize: { value: horizontalStripeSize },
+    uHorrorColorGradingAmount: { value: horrorColorGradingAmount },
+  };
+
+  const material = new ShaderMaterial({
+    uniforms,
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      precision highp float;
+      
+      varying vec2 vUv;
+      uniform sampler2D tDiffuse;
+      uniform float uTime;
+      uniform float uIntensity;
+      uniform float uChromaShift;
+      uniform float uDisplacement;
+      uniform float uNoise;
+      uniform float uScanline;
+      uniform float uGlitchFreq;
+      uniform float uHorrorMode;
+      uniform float uEnableWarping;
+      uniform float uWarpingAmount;
+      uniform vec2 uResolution;
+      uniform float uVignetteAmount;
+      uniform float uEdgeChromaticStrength;
+      uniform float uSignalLossStrength;
+      uniform float uColorDistortionAmount;
+      uniform float uBlockSize;
+      uniform float uHorizontalStripeSize;
+      uniform float uHorrorColorGradingAmount;
+
+      // Better random functions
+      float rand(vec2 co) {
+        return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+      }
+
+      float rand(float n) {
+        return fract(sin(n) * 43758.5453123);
+      }
+
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float a = rand(i);
+        float b = rand(i + vec2(1.0, 0.0));
+        float c = rand(i + vec2(0.0, 1.0));
+        float d = rand(i + vec2(1.0, 1.0));
+        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+      }
+
+      // Smooth glitch trigger
+      float glitchStrength(float time) {
+        float t = time * uGlitchFreq;
+        float pulse = step(0.85, fract(sin(floor(t) * 123.456) * 789.123));
+        float wave = sin(t * 3.0) * 0.5 + 0.5;
+        return pulse * wave * uIntensity;
+      }
+
+      // Block displacement
+      vec2 blockDisplacement(vec2 uv, float time) {
+        float glitch = glitchStrength(time);
+        if (glitch < 0.01) return uv;
+
+        float blockY = floor(uv.y * uBlockSize + time * 2.0);
+        float displace = rand(blockY + floor(time * 3.0)) - 0.5;
+        
+        float threshold = 0.3 + rand(blockY) * 0.4;
+        float amount = step(threshold, rand(blockY + time * 0.5));
+        
+        return uv + vec2(displace * uDisplacement * amount * glitch, 0.0);
+      }
+
+      // RGB channel shift with wave distortion
+      vec3 chromaticAberration(sampler2D tex, vec2 uv, float time) {
+        float glitch = glitchStrength(time);
+        vec2 pixelSize = 1.0 / uResolution;
+        
+        float shift = uChromaShift * pixelSize.x * (0.3 + glitch * 0.7);
+        float wave = sin(uv.y * 10.0 + time * 2.0) * 0.5;
+        
+        vec2 rOffset = vec2(shift * (1.0 + wave * 0.3), 0.0);
+        vec2 bOffset = vec2(-shift * (1.0 + wave * 0.3), 0.0);
+        
+        float r = texture2D(tex, uv + rOffset).r;
+        float g = texture2D(tex, uv).g;
+        float b = texture2D(tex, uv + bOffset).b;
+        
+        return vec3(r, g, b);
+      }
+
+      // Digital scanlines
+      float scanlines(vec2 uv, float time) {
+        float line = sin(uv.y * uResolution.y * 1.5);
+        float scroll = sin((uv.y + time * 0.05) * uResolution.y * 0.5);
+        return 1.0 - ((line * 0.5 + 0.5) * 0.15 + (scroll * 0.5 + 0.5) * 0.1) * uScanline;
+      }
+
+      // Digital noise/grain
+      float digitalNoise(vec2 uv, float time) {
+        float glitch = glitchStrength(time);
+        float n = noise(uv * uResolution * 0.5 + time * 10.0);
+        float gridNoise = rand(floor(uv * uResolution * 0.1) + time * 5.0);
+        return mix(n, gridNoise, glitch) * uNoise;
+      }
+
+      // Random horizontal tears
+      vec2 horizontalTears(vec2 uv, float time) {
+        float glitch = glitchStrength(time);
+        if (glitch < 0.3) return uv;
+        
+        float lineY = floor(uv.y * uHorizontalStripeSize);
+        float tearStrength = step(0.92, rand(lineY + floor(time * 8.0)));
+        float tearOffset = (rand(lineY * 123.0 + time) - 0.5) * 0.1;
+        
+        return uv + vec2(tearOffset * tearStrength * glitch, 0.0);
+      }
+
+      // Color distortion
+      vec3 colorDistortion(vec3 color, vec2 uv, float time) {
+        if (uColorDistortionAmount < 0.01) return color;
+        
+        float glitch = glitchStrength(time);
+        
+        // Inverted bars
+        float bar = step(0.95, rand(floor(uv.y * 20.0 + time * 5.0)));
+        color = mix(color, 1.0 - color, bar * glitch * 0.6 * uColorDistortionAmount);
+        
+        // Brightness spikes
+        float spike = rand(floor(time * 30.0)) * step(0.98, rand(uv.y + time));
+        color += vec3(spike * glitch * 0.4 * uColorDistortionAmount);
+        
+        return color;
+      }
+
+      // === HORROR MODE EFFECTS ===
+      
+      // VHS tracking errors - horizontal distortion bands
+      vec2 vhsTracking(vec2 uv, float time) {
+        float t = floor(time * 0.5);
+        float band = step(0.7, rand(vec2(floor(uv.y * 8.0), t)));
+        float offset = (rand(vec2(floor(uv.y * 8.0), t + 123.0)) - 0.5) * 0.15;
+        return uv + vec2(offset * band, 0.0);
+      }
+
+      // Face/image warping distortion
+      vec2 horrorDistortion(vec2 uv, float time) {
+        vec2 center = vec2(0.5, 0.45);
+        vec2 toCenter = uv - center;
+        float dist = length(toCenter);
+        
+        // Pulsating warp
+        float warpTime = time * 0.3;
+        float warpPulse = sin(warpTime) * 0.5 + 0.5;
+        float warp = sin(dist * 15.0 - time * 2.0) * uWarpingAmount * warpPulse;
+        
+        // Stretch distortion (vertical stretching is creepier)
+        float stretchTrigger = step(0.92, rand(floor(time * 0.5)));
+        float verticalStretch = sin(uv.x * 20.0 + time * 3.0) * 0.08 * stretchTrigger;
+        
+        return uv + toCenter * warp + vec2(0.0, verticalStretch * uWarpingAmount);
+      }
+
+      // Screen static/dead pixels
+      float staticNoise(vec2 uv, float time) {
+        float t = floor(time * 50.0);
+        float staticIntensity = step(0.88, rand(vec2(t, 0.0)));
+        return rand(uv * time * 100.0) * staticIntensity;
+      }
+
+      // Signal loss effect
+      float signalLoss(vec2 uv, float time) {
+        float t = floor(time * 0.3);
+        float lossArea = step(0.9, rand(vec2(t, 1.0)));
+        float lossBand = step(rand(vec2(t, 2.0)), uv.y) * 
+                         step(uv.y, rand(vec2(t, 3.0)));
+        return lossArea * lossBand;
+      }
+
+      // Creepy color grading
+      vec3 horrorColorGrade(vec3 color, float time) {
+        if (uHorrorColorGradingAmount < 0.01) return color;
+        
+        vec3 originalColor = color;
+        
+        // Desaturate
+        float gray = dot(color, vec3(0.299, 0.587, 0.114));
+        color = mix(color, vec3(gray), 0.4);
+        
+        // Add creepy tint (randomly shift between red and green)
+        float tintSwitch = step(0.5, fract(sin(floor(time * 0.2)) * 999.0));
+        vec3 redTint = vec3(1.3, 0.7, 0.7);
+        vec3 greenTint = vec3(0.7, 1.2, 0.8);
+        vec3 tint = mix(greenTint, redTint, tintSwitch);
+        color *= tint;
+        
+        // Crush blacks/boost contrast
+        color = pow(color, vec3(1.3));
+        color = (color - 0.5) * 1.4 + 0.5;
+        
+        return mix(originalColor, color, uHorrorColorGradingAmount);
+      }
+
+      // Ghosting/motion trails
+      vec3 ghosting(sampler2D tex, vec2 uv, float time) {
+        float glitch = glitchStrength(time);
+        vec3 current = texture2D(tex, uv).rgb;
+        
+        // Sample previous frames with offset
+        vec2 offset1 = vec2(0.003 * glitch, 0.0);
+        vec2 offset2 = vec2(-0.006 * glitch, 0.0);
+        vec3 ghost1 = texture2D(tex, uv + offset1).rgb * 0.4;
+        vec3 ghost2 = texture2D(tex, uv + offset2).rgb * 0.25;
+        
+        return current + ghost1 + ghost2;
+      }
+
+      // Random inverted flashes
+      float invertFlash(float time) {
+        float t = floor(time * 10.0);
+        return step(0.97, rand(vec2(t, 999.0)));
+      }
+
+      // Pixelation/blocky artifacts
+      vec2 pixelate(vec2 uv, float time) {
+        float glitch = glitchStrength(time);
+        float blockSize = mix(1.0, 0.02, glitch * step(0.8, rand(floor(time))));
+        vec2 blocks = floor(uv / blockSize) * blockSize;
+        return mix(uv, blocks, step(0.85, glitch));
+      }
+
+      void main() {
+        vec2 uv = vUv;
+        
+        // === HORROR MODE EFFECTS (if enabled) ===
+        if (uHorrorMode > 0.5) {
+          // Apply VHS tracking errors
+          uv = vhsTracking(uv, uTime);
+          
+          // Apply creepy face/image warping (if enabled)
+          if (uEnableWarping > 0.5) {
+            uv = horrorDistortion(uv, uTime);
+          }
+          
+          // Pixelation during intense glitches
+          uv = pixelate(uv, uTime);
+        }
+        
+        // Apply layered distortions
+        uv = horizontalTears(uv, uTime);
+        uv = blockDisplacement(uv, uTime);
+        
+        // Sample with chromatic aberration OR ghosting (horror mode)
+        vec3 color;
+        if (uHorrorMode > 0.5) {
+          color = ghosting(tDiffuse, uv, uTime);
+        } else {
+          color = chromaticAberration(tDiffuse, uv, uTime);
+        }
+        
+        // Apply scanlines
+        color *= scanlines(vUv, uTime);
+        
+        // Add digital noise
+        float noise = digitalNoise(vUv, uTime);
+        color += vec3(noise);
+        
+        // === HORROR MODE EFFECTS ===
+        if (uHorrorMode > 0.5) {
+          // Add intense static
+          float staticVal = staticNoise(vUv, uTime);
+          color = mix(color, vec3(staticVal), staticVal * 0.5);
+          
+          // Signal loss (black bars)
+          float sigLoss = signalLoss(vUv, uTime);
+          color = mix(color, vec3(0.0), sigLoss * uSignalLossStrength);
+          
+          // Apply creepy color grading
+          color = horrorColorGrade(color, uTime);
+          
+          // Random inverted flashes
+          float flash = invertFlash(uTime);
+          color = mix(color, 1.0 - color, flash * 0.8);
+        }
+        
+        // Color distortions
+        color = colorDistortion(color, vUv, uTime);
+        
+        // Configurable vignette (0 disables)
+        if (uVignetteAmount > 0.0) {
+          float vignette = 1.0 - length(vUv - 0.5) * uVignetteAmount;
+          color *= clamp(vignette, 0.0, 1.0);
+        }
+        
+        // Subtle RGB shift on edges (blend so grain/scanlines remain)
+        if (uEdgeChromaticStrength > 0.0) {
+          float edgeDist = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
+          float edgeMask = smoothstep(0.05, 0.0, edgeDist);
+          float edgeShift = (0.05 - clamp(edgeDist, 0.0, 0.05)) * 20.0;
+          vec3 edgeCol = chromaticAberration(tDiffuse, uv, uTime + edgeShift);
+          color = mix(color, edgeCol, edgeMask * uEdgeChromaticStrength);
+        }
+        
+        gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+      }
+    `,
+    transparent: true,
+  });
+
+  const quad = new Mesh(new PlaneGeometry(2, 2), material);
+  scene.add(quad);
+
+  function resizeIfNeeded() {
+    const dpr = renderer.getPixelRatio();
+    const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+    const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      renderer.setSize(w, h, false);
+      uniforms.uResolution.value.set(w, h);
+    }
+  }
+
+  let raf = 0;
+  let disposed = false;
+
+  function render() {
+    if (disposed) return;
+    resizeIfNeeded();
+    uniforms.uTime.value += 0.016 * speed;
+
+    // Update video texture if needed
+    if (
+      isVideo &&
+      videoElement &&
+      videoElement.readyState >= videoElement.HAVE_CURRENT_DATA
+    ) {
+      tex.needsUpdate = true;
+    }
+
+    renderer.render(scene, camera);
+    raf = requestAnimationFrame(render);
+  }
+
+  render();
+
+  return function dispose() {
+    disposed = true;
+    cancelAnimationFrame(raf);
+    tex.dispose();
+    quad.geometry.dispose();
+    material.dispose();
+    renderer.dispose();
+  };
+}
+
+/**
+ * Fluid-like hover tail reveal effect with two-image blending.
+ * Simplified shader-based approach with trail persistence.
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {{
+ *  imageUrl: string,
+ *  backImageUrl?: string|null,
+ *  width?: number,
+ *  height?: number,
+ *  speed?: number,
+ *  decay?: number,
+ *  lineWidth?: number,
+ *  lineIntensity?: number,
+ *  threshold?: number,
+ *  edgeWidth?: number,
+ *  hiDPI?: boolean,
+ * }} options
+ * @returns {() => void} dispose
+ */
+function fluidSimulationEffect(canvas, options = {}) {
+  const {
+    imageUrl,
+    backImageUrl = null,
+    width = canvas.clientWidth || 512,
+    height = canvas.clientHeight || 384,
+    speed = 1.0, // control 
+    decay = 0.97,
+    lineWidth = 0.05,
+    lineIntensity = 0.3,
+    threshold = 0.02,
+    edgeWidth = 0.004,
+    hiDPI = true,
+    movementTimeout = 50, // Stop effect after this many ms of no movement
+  } = options;
+
+  if (!canvas) throw new Error("fluidSimulationEffect: canvas is required");
+  if (!imageUrl) throw new Error("fluidSimulationEffect: imageUrl is required");
+
+  const dpr = hiDPI ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+  const renderer = new WebGLRenderer({
+    canvas,
+    antialias: false,
+    alpha: false,
+    powerPreference: "high-performance",
+  });
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(width, height, false);
+  renderer.setClearColor(0x000000, 1);
+
+  // Render target params
+  const rtParams = {
+    minFilter: LinearFilter,
+    magFilter: LinearFilter,
+    format: RGBAFormat,
+    type: HalfFloatType,
+    depthBuffer: false,
+    stencilBuffer: false,
+  };
+
+  // Trail render targets (ping-pong)
+  const trailA = new WebGLRenderTarget(width, height, rtParams);
+  const trailB = new WebGLRenderTarget(width, height, rtParams);
+  let trailPing = trailA;
+  let trailPong = trailB;
+
+  // Load textures
+  const loader = new TextureLoader();
+  const topTextureSize = new Vector2(1024, 1024);
+  const bottomTextureSize = new Vector2(1024, 1024);
+
+  const topTexture = loader.load(imageUrl, (texture) => {
+    topTextureSize.set(texture.image.width, texture.image.height);
+  });
+  topTexture.colorSpace = NoColorSpace;
+  topTexture.minFilter = LinearFilter;
+  topTexture.magFilter = LinearFilter;
+  topTexture.flipY = true;
+  topTexture.generateMipmaps = false;
+
+  const bottomTexture = backImageUrl
+    ? loader.load(backImageUrl, (texture) => {
+        bottomTextureSize.set(texture.image.width, texture.image.height);
+      })
+    : topTexture;
+
+  if (backImageUrl) {
+    bottomTexture.colorSpace = NoColorSpace;
+    bottomTexture.minFilter = LinearFilter;
+    bottomTexture.magFilter = LinearFilter;
+    bottomTexture.flipY = true;
+    bottomTexture.generateMipmaps = false;
+  } else {
+    bottomTextureSize.copy(topTextureSize);
+  }
+
+  // Scenes
+  const scene = new Scene();
+  const camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const quad = new Mesh(new PlaneGeometry(2, 2), null);
+  scene.add(quad);
+
+  // Mouse state
+  const mouse = new Vector2(-100, -100);
+  const prevMouse = new Vector2(-100, -100);
+  let isMoving = false;
+  let movementTimeoutId = null;
+
+  function stopMovement() {
+    isMoving = false;
+  }
+
+  function onMove(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = 1.0 - (e.clientY - rect.top) / rect.height;
+
+    if (!isMoving) {
+      prevMouse.set(x, y);
+    } else {
+      prevMouse.copy(mouse);
+    }
+    mouse.set(x, y);
+    isMoving = true;
+    performance.now();
+
+    // Clear existing timeout and set new one
+    if (movementTimeoutId !== null) {
+      clearTimeout(movementTimeoutId);
+    }
+    movementTimeoutId = setTimeout(stopMovement, movementTimeout);
+  }
+
+  function onLeave() {
+    isMoving = false;
+    mouse.set(-100, -100);
+    prevMouse.set(-100, -100);
+    if (movementTimeoutId !== null) {
+      clearTimeout(movementTimeoutId);
+      movementTimeoutId = null;
+    }
+  }
+
+  canvas.addEventListener("mousemove", onMove);
+  canvas.addEventListener("mouseleave", onLeave);
+
+  // Vertex shader (shared)
+  const vertexShader = `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+
+  // Fluid trail shader (accumulates trails)
+  const fluidFragmentShader = `
+    precision highp float;
+    uniform sampler2D uPrevTrails;
+    uniform vec2 uMouse;
+    uniform vec2 uPrevMouse;
+    uniform vec2 uResolution;
+    uniform float uDecay;
+    uniform bool uIsMoving;
+    uniform float uLineWidth;
+    uniform float uLineIntensity;
+
+    varying vec2 vUv;
+
+    void main() {
+      vec4 prevState = texture2D(uPrevTrails, vUv);
+      float newValue = prevState.r * uDecay;
+
+      if (uIsMoving) {
+        vec2 mouseDirection = uMouse - uPrevMouse;
+        float lineLength = length(mouseDirection);
+
+        if (lineLength > 0.001) {
+          vec2 mouseDir = mouseDirection / lineLength;
+          vec2 toPixel = vUv - uPrevMouse;
+          float projAlong = dot(toPixel, mouseDir);
+          projAlong = clamp(projAlong, 0.0, lineLength);
+
+          vec2 closestPoint = uPrevMouse + projAlong * mouseDir;
+          float dist = length(vUv - closestPoint);
+
+          float intensity = smoothstep(uLineWidth, 0.0, dist) * uLineIntensity;
+          newValue += intensity;
+        }
+      }
+
+      gl_FragColor = vec4(newValue, 0.0, 0.0, 1.0);
+    }
+  `;
+
+  // Display shader (blends two images based on fluid)
+  const displayFragmentShader = `
+    precision highp float;
+    uniform sampler2D uFluid;
+    uniform sampler2D uTopTexture;
+    uniform sampler2D uBottomTexture;
+    uniform vec2 uResolution;
+    uniform float uDpr;
+    uniform vec2 uTopTextureSize;
+    uniform vec2 uBottomTextureSize;
+    uniform float uThreshold;
+    uniform float uEdgeWidth;
+
+    varying vec2 vUv;
+
+    vec2 getCoverUV(vec2 uv, vec2 textureSize) {
+      if (textureSize.x < 1.0 || textureSize.y < 1.0) return uv;
+
+      // Calculate aspect ratios
+      vec2 ratio = vec2(
+        min((uResolution.x / uResolution.y) / (textureSize.x / textureSize.y), 1.0),
+        min((uResolution.y / uResolution.x) / (textureSize.y / textureSize.x), 1.0)
+      );
+
+      // Center and scale UV coordinates
+      return vec2(
+        uv.x * ratio.x + (1.0 - ratio.x) * 0.5,
+        uv.y * ratio.y + (1.0 - ratio.y) * 0.5
+      );
+    }
+
+    void main() {
+      float fluid = texture2D(uFluid, vUv).r;
+
+      vec2 topUV = getCoverUV(vUv, uTopTextureSize);
+      vec2 bottomUV = getCoverUV(vUv, uBottomTextureSize);
+
+      vec4 topColor = texture2D(uTopTexture, topUV);
+      vec4 bottomColor = texture2D(uBottomTexture, bottomUV);
+
+      float edgeW = uEdgeWidth / uDpr;
+      float t = smoothstep(uThreshold, uThreshold + edgeW, fluid);
+
+      vec4 finalColor = mix(topColor, bottomColor, t);
+      gl_FragColor = finalColor;
+    }
+  `;
+
+  // Fluid material (trail simulation)
+  const fluidMaterial = new ShaderMaterial({
+    uniforms: {
+      uPrevTrails: { value: null },
+      uMouse: { value: mouse },
+      uPrevMouse: { value: prevMouse },
+      uResolution: { value: new Vector2(width, height) },
+      uDecay: { value: decay },
+      uIsMoving: { value: false },
+      uLineWidth: { value: lineWidth },
+      uLineIntensity: { value: lineIntensity },
+    },
+    vertexShader,
+    fragmentShader: fluidFragmentShader,
+    depthTest: false,
+    depthWrite: false,
+  });
+
+  // Display material (final output)
+  const displayMaterial = new ShaderMaterial({
+    uniforms: {
+      uFluid: { value: null },
+      uTopTexture: { value: topTexture },
+      uBottomTexture: { value: bottomTexture },
+      uResolution: { value: new Vector2(width * dpr, height * dpr) },
+      uDpr: { value: dpr },
+      uTopTextureSize: { value: topTextureSize },
+      uBottomTextureSize: { value: bottomTextureSize },
+      uThreshold: { value: threshold },
+      uEdgeWidth: { value: edgeWidth },
+    },
+    vertexShader,
+    fragmentShader: displayFragmentShader,
+    depthTest: false,
+    depthWrite: false,
+  });
+
+  function resizeIfNeeded() {
+    const w = canvas.clientWidth || width;
+    const h = canvas.clientHeight || height;
+    const pw = Math.round(w * dpr);
+    const ph = Math.round(h * dpr);
+
+    if (canvas.width !== pw || canvas.height !== ph) {
+      renderer.setSize(w, h, false);
+      trailA.setSize(pw, ph);
+      trailB.setSize(pw, ph);
+      fluidMaterial.uniforms.uResolution.value.set(w, h);
+      displayMaterial.uniforms.uResolution.value.set(pw, ph);
+      displayMaterial.uniforms.uDpr.value = dpr;
+    }
+  }
+
+  let disposed = false;
+
+  function render() {
+    if (disposed) return;
+    requestAnimationFrame(render);
+    resizeIfNeeded();
+
+    // Run multiple simulation steps for speed > 1
+    const steps = Math.max(1, Math.floor(speed));
+    for (let i = 0; i < steps; i++) {
+      // Update fluid trail
+      fluidMaterial.uniforms.uPrevTrails.value = trailPing.texture;
+      fluidMaterial.uniforms.uIsMoving.value = isMoving;
+      quad.material = fluidMaterial;
+      renderer.setRenderTarget(trailPong);
+      renderer.render(scene, camera);
+
+      // Swap ping-pong
+      const temp = trailPing;
+      trailPing = trailPong;
+      trailPong = temp;
+    }
+
+    // Display final result
+    displayMaterial.uniforms.uFluid.value = trailPing.texture;
+    quad.material = displayMaterial;
+    renderer.setRenderTarget(null);
+    renderer.render(scene, camera);
+  }
+
+  render();
+
+  function dispose() {
+    disposed = true;
+    if (movementTimeoutId !== null) {
+      clearTimeout(movementTimeoutId);
+    }
+    canvas.removeEventListener("mousemove", onMove);
+    canvas.removeEventListener("mouseleave", onLeave);
+    topTexture.dispose();
+    if (backImageUrl) bottomTexture.dispose();
+    trailA.dispose();
+    trailB.dispose();
+    quad.geometry.dispose();
+    fluidMaterial.dispose();
+    displayMaterial.dispose();
+    renderer.dispose();
+  }
+
+  return dispose;
+}
 
 // Default configurations for each effect - smooth but fast
 const DEFAULT_CONFIGS = {
@@ -32077,33 +32937,55 @@ const DEFAULT_CONFIGS = {
     tint: "#ffffff",
     shadowIntensity: -0.28,
   },
+
+  fluid: {
+    speed: 1.0,
+    decay: 0.97,
+    lineWidth: 0.05,
+    lineIntensity: 0.3,
+    threshold: 0.02,
+    edgeWidth: 0.004,
+    movementTimeout: 50,
+    hiDPI: true,
+  },
+  glitch: {
+    speed: 1.0,
+    intensity: 0.7,
+    chromaShift: 3.0,
+    displacement: 0.05,
+    noiseAmount: 0.15,
+    scanlineIntensity: 0.3,
+    glitchFrequency: 0.3,
+    horrorMode: false,
+    enableWarping: true,
+    warpingAmount: 0.3,
+    vignette: 0.0,
+    edgeChromaticStrength: 0.0,
+    signalLossStrength: 0.0,
+    colorDistortionAmount: 1.0,
+    blockSize: 15.0,
+    horizontalStripeSize: 30.0,
+    horrorColorGradingAmount: 0.02,
+  },
 };
 
 // Store dispose functions for cleanup
 const activeEffects = new Map();
 
-/**
- * Initialize effects on elements with kxxxr classes
- */
+// (lightweight debug UI removed)
+
 function initKxxxrEffects() {
-  // Find all elements with kxxxr classes
   const rippleElements = document.querySelectorAll(".kxxxr-ripple");
   const realisticElements = document.querySelectorAll(".kxxxr-realistic");
+  const glitchElements = document.querySelectorAll(".kxxxr-glitch");
+  const fluidElements = document.querySelectorAll(".kxxxr-fluid");
 
-  // Initialize ripple effects
-  rippleElements.forEach((element, index) => {
-    initRippleEffect(element, index);
-  });
-
-  // Initialize realistic effects
-  realisticElements.forEach((element, index) => {
-    initRealisticEffect(element, index);
-  });
+  rippleElements.forEach((el, i) => initRippleEffect(el, i));
+  realisticElements.forEach((el, i) => initRealisticEffect(el, i));
+  glitchElements.forEach((el, i) => initGlitchEffect(el, i));
+  fluidElements.forEach((el, i) => initFluidEffect(el, i));
 }
 
-/**
- * Initialize ripple effect on element
- */
 function initRippleEffect(element, index) {
   const imageUrl = getImageUrl(element);
   if (!imageUrl) {
@@ -32115,26 +32997,29 @@ function initRippleEffect(element, index) {
     return;
   }
 
-  // Create canvas
   const canvas = createCanvas(element);
   if (!canvas) return;
 
-  // Get custom config from data attributes
   const config = getConfigFromAttributes(element, "ripple");
 
-  // Initialize effect
-  const dispose = waterHoverEffect(canvas, {
+  let dispose = waterHoverEffect(canvas, {
     imageUrl,
     ...config,
   });
 
-  // Store for cleanup
   activeEffects.set(element, dispose);
+
+  if (config && config.debug === true) {
+    let currentOptions = { ...config };
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = waterHoverEffect(canvas, { imageUrl, ...currentOptions });
+      activeEffects.set(element, dispose);
+    };
+    createDatGuiForProgrammatic("ripple", currentOptions, recreate);
+  }
 }
 
-/**
- * Initialize realistic effect on element
- */
 function initRealisticEffect(element, index) {
   const imageUrl = getImageUrl(element);
   if (!imageUrl) {
@@ -32146,18 +33031,12 @@ function initRealisticEffect(element, index) {
     return;
   }
 
-  // Create canvas
   const canvas = createCanvas(element);
   if (!canvas) return;
-
-  // Get element dimensions
   const rect = element.getBoundingClientRect();
-
-  // Get custom config from data attributes
   const config = getConfigFromAttributes(element, "realistic");
 
-  // Initialize effect with balanced resolution for smooth but fast performance
-  const dispose = realisticWaterHoverEffect(canvas, {
+  let dispose = realisticWaterHoverEffect(canvas, {
     imageUrl,
     width: Math.min(rect.width || 400, 384),
     height: Math.min(rect.height || 300, 288),
@@ -32165,8 +33044,150 @@ function initRealisticEffect(element, index) {
     ...config,
   });
 
-  // Store for cleanup
   activeEffects.set(element, dispose);
+
+  if (config && config.debug === true) {
+    let currentOptions = { ...config };
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = realisticWaterHoverEffect(canvas, {
+        imageUrl,
+        width: Math.min(rect.width || 400, 384),
+        height: Math.min(rect.height || 300, 288),
+        ...mapAdvancedFilterConfig(currentOptions),
+        ...currentOptions,
+      });
+      activeEffects.set(element, dispose);
+    };
+    createDatGuiForProgrammatic("realistic", currentOptions, recreate);
+  }
+}
+
+function initGlitchEffect(element, index) {
+  const config = getConfigFromAttributes(element, "glitch");
+
+  if (element.tagName.toLowerCase() === "video") {
+    const videoElement = element;
+    const initVideo = () => {
+      const canvas = document.createElement("canvas");
+      const rect = videoElement.getBoundingClientRect();
+      const w = videoElement.videoWidth || rect.width || 640;
+      const h = videoElement.videoHeight || rect.height || 480;
+      canvas.width = w;
+      canvas.height = h;
+      canvas.style.width = videoElement.style.width || "100%";
+      canvas.style.height = videoElement.style.height || "100%";
+      canvas.style.display = "block";
+      canvas.style.objectFit = videoElement.style.objectFit || "cover";
+      const styles = window.getComputedStyle(videoElement);
+      canvas.style.borderRadius = styles.borderRadius;
+      canvas.style.border = styles.border;
+      canvas.style.boxShadow = styles.boxShadow;
+      videoElement.style.position = "absolute";
+      videoElement.style.opacity = "0";
+      videoElement.style.pointerEvents = "none";
+      videoElement.style.width = "1px";
+      videoElement.style.height = "1px";
+      videoElement.parentNode.insertBefore(canvas, videoElement);
+
+      let dispose = glitchEffect(canvas, { videoElement, ...config });
+      activeEffects.set(element, dispose);
+
+      if (config && config.debug === true) {
+        let currentOptions = { ...config };
+        const recreate = () => {
+          if (dispose) dispose();
+          dispose = glitchEffect(canvas, { videoElement, ...currentOptions });
+          activeEffects.set(element, dispose);
+        };
+        createDatGuiForProgrammatic("glitch", currentOptions, recreate);
+      }
+    };
+
+    if (videoElement.readyState >= 2) {
+      initVideo();
+    } else {
+      videoElement.addEventListener("loadedmetadata", initVideo, {
+        once: true,
+      });
+      videoElement.addEventListener(
+        "loadeddata",
+        () => {
+          if (!activeEffects.has(element)) initVideo();
+        },
+        { once: true }
+      );
+    }
+  } else {
+    const imageUrl = getImageUrl(element);
+    if (!imageUrl) {
+      console.warn(`kxxxr-glitch: No image found for element ${index}`);
+      return;
+    }
+    const canvas = createCanvas(element);
+    if (!canvas) return;
+    let dispose = glitchEffect(canvas, { imageUrl, ...config });
+    activeEffects.set(element, dispose);
+
+    if (config && config.debug === true) {
+      let currentOptions = { ...config };
+      const recreate = () => {
+        if (dispose) dispose();
+        dispose = glitchEffect(canvas, { imageUrl, ...currentOptions });
+        activeEffects.set(element, dispose);
+      };
+      createDatGuiForProgrammatic("glitch", currentOptions, recreate);
+    }
+  }
+}
+
+/** Duplicate removed **/
+
+function initFluidEffect(element, index) {
+  const imageUrl = getImageUrl(element);
+  if (!imageUrl) {
+    console.warn(`kxxxr-fluid: No image found for element ${index}. Please add an image using:
+    - src attribute (for img elements)
+    - background-image CSS property
+    - data-src attribute
+    - data-image attribute`);
+    return;
+  }
+  const canvas = createCanvas(element);
+  if (!canvas) return;
+  const rect = element.getBoundingClientRect();
+  const config = getConfigFromAttributes(element, "fluid");
+  const backImageUrl =
+    element.getAttribute("data-back") ||
+    element.getAttribute("data-back-image") ||
+    (element.dataset
+      ? element.dataset.back || element.dataset.backImage
+      : null);
+
+  let dispose = fluidSimulationEffect(canvas, {
+    imageUrl,
+    backImageUrl,
+    width: rect.width || 512,
+    height: rect.height || 384,
+    ...config,
+  });
+  activeEffects.set(element, dispose);
+
+  if (config && config.debug === true) {
+    let currentOptions = { ...config };
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = fluidSimulationEffect(canvas, {
+        imageUrl,
+        backImageUrl,
+        width: rect.width || 512,
+        height: rect.height || 384,
+        ...currentOptions,
+      });
+      activeEffects.set(element, dispose);
+    };
+    createDatGuiForProgrammatic("fluid", currentOptions, recreate);
+  }
 }
 
 /**
@@ -32470,8 +33491,17 @@ function createCanvas(element) {
   canvas.height = height;
 
   // Set CSS size to match original element
-  canvas.style.width = width + "px";
-  canvas.style.height = height + "px";
+  // Preserve responsive sizing if the original element used percentages or viewport units
+  const inlineWidth =
+    element.style && element.style.width ? element.style.width.trim() : "";
+  const inlineHeight =
+    element.style && element.style.height ? element.style.height.trim() : "";
+  const isResponsiveWidth = /%|vw|vh|vmin|vmax|auto/i.test(inlineWidth);
+  const isResponsiveHeight = /%|vw|vh|vmin|vmax|auto/i.test(inlineHeight);
+  canvas.style.width =
+    isResponsiveWidth && inlineWidth ? inlineWidth : width + "px";
+  canvas.style.height =
+    isResponsiveHeight && inlineHeight ? inlineHeight : height + "px";
   canvas.style.display = "block";
 
   // Preserve original styling
@@ -32508,8 +33538,12 @@ function getConfigFromAttributes(element, effectType) {
       }
     }
     if (value !== null) {
+      // Handle boolean values
+      if (value === "true" || value === "false") {
+        config[key] = value === "true";
+      }
       // Color strings (#rrggbb or rgb/rgba) should remain strings
-      if (/^#|^rgb\(/i.test(value)) {
+      else if (/^#|^rgb\(/i.test(value)) {
         config[key] = value;
       } else {
         const numValue = parseFloat(value);
@@ -32518,6 +33552,9 @@ function getConfigFromAttributes(element, effectType) {
     }
   });
 
+  // Debug flag via data-debug
+  const dbg = element.getAttribute("data-debug");
+  if (dbg === "true") config.debug = true;
   return config;
 }
 
@@ -32580,6 +33617,67 @@ function mapAdvancedFilterConfig(c) {
   return out;
 }
 
+// Helpers: dat.gui debug for programmatic API (only if CDN dat.gui is present)
+function createDatGuiForProgrammatic(effectType, optionsRef, recreate) {
+  if (typeof window === "undefined" || !window.dat || !window.dat.GUI)
+    return null;
+  if (optionsRef && optionsRef.__gui) return optionsRef.__gui;
+  const gui = new window.dat.GUI({ name: `kxxxr ${effectType}` });
+  const addNum = (obj, key, min, max, step) =>
+    gui.add(obj, key, min, max).step(step).onChange(recreate);
+  const addBool = (obj, key) => gui.add(obj, key).onChange(recreate);
+
+  if (effectType === "ripple") {
+    addNum(optionsRef, "strength", 0, 1.5, 0.01);
+    addNum(optionsRef, "radius", 0.05, 1, 0.01);
+    addNum(optionsRef, "pulseSpeed", 0, 5, 0.1);
+    addNum(optionsRef, "decay", 0.1, 5, 0.1);
+    addNum(optionsRef, "frequency", 1, 60, 1);
+  }
+  if (effectType === "realistic") {
+    addNum(optionsRef, "simulationSpeed", 0.1, 5, 0.1);
+    addNum(optionsRef, "effectRadius", 1, 120, 1);
+    addNum(optionsRef, "headStrength", 0, 2, 0.05);
+    addNum(optionsRef, "tailStrength", 0, 2, 0.05);
+    addNum(optionsRef, "tailWidth", 1, 120, 1);
+    addNum(optionsRef, "reflectionIntensity", 0, 2, 0.05);
+    addNum(optionsRef, "contrast", 0, 2, 0.05);
+    addNum(optionsRef, "saturation", 0, 2, 0.05);
+    addNum(optionsRef, "brightness", 0, 3, 0.05);
+    addNum(optionsRef, "shadowIntensity", -1, 1, 0.05);
+  }
+  if (effectType === "glitch") {
+    addNum(optionsRef, "speed", 0, 60, 0.1);
+    addNum(optionsRef, "intensity", 0, 2, 0.05);
+    addNum(optionsRef, "chromaShift", 0, 10, 0.1);
+    addNum(optionsRef, "displacement", 0, 0.2, 0.005);
+    addNum(optionsRef, "noiseAmount", 0, 1, 0.05);
+    addNum(optionsRef, "scanlineIntensity", 0, 1, 0.05);
+    addNum(optionsRef, "glitchFrequency", 0, 1, 0.01);
+    addNum(optionsRef, "blockSize", 1, 60, 1);
+    addNum(optionsRef, "horizontalStripeSize", 1, 60, 1);
+    addBool(optionsRef, "horrorMode");
+    addBool(optionsRef, "enableWarping");
+    addNum(optionsRef, "warpingAmount", 0, 1, 0.01);
+    addNum(optionsRef, "vignette", 0, 2, 0.01);
+    addNum(optionsRef, "edgeChromaticStrength", 0, 1, 0.01);
+    addNum(optionsRef, "signalLossStrength", 0, 1, 0.01);
+    addNum(optionsRef, "colorDistortionAmount", 0, 1, 0.01);
+    addNum(optionsRef, "horrorColorGradingAmount", 0, 1, 0.01);
+  }
+  if (effectType === "fluid") {
+    addNum(optionsRef, "speed", 0.1, 20, 0.1);
+    addNum(optionsRef, "lineWidth", 0.001, 0.2, 0.001);
+    addNum(optionsRef, "lineIntensity", 0, 1, 0.01);
+    addNum(optionsRef, "decay", 0.5, 0.999, 0.001);
+    addNum(optionsRef, "threshold", 0, 0.2, 0.001);
+    addNum(optionsRef, "edgeWidth", 0, 0.02, 0.0005);
+  }
+
+  optionsRef.__gui = gui;
+  return gui;
+}
+
 // Simple API functions for easy usage
 function rippleEffect(selector, options = {}) {
   const elements =
@@ -32598,11 +33696,18 @@ function rippleEffect(selector, options = {}) {
     const canvas = createCanvas(element);
     if (!canvas) return;
 
-    const config = { ...DEFAULT_CONFIGS.ripple, ...options };
-    const dispose = waterHoverEffect(canvas, {
-      imageUrl,
-      ...config,
-    });
+    let currentOptions = { ...DEFAULT_CONFIGS.ripple, ...options };
+    let dispose = waterHoverEffect(canvas, { imageUrl, ...currentOptions });
+
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = waterHoverEffect(canvas, { imageUrl, ...currentOptions });
+      activeEffects.set(element, dispose);
+    };
+
+    if (options && options.debug === true) {
+      createDatGuiForProgrammatic("ripple", currentOptions, recreate);
+    }
 
     disposes.push(dispose);
     activeEffects.set(element, dispose);
@@ -32629,20 +33734,115 @@ function realisticEffectSimple(selector, options = {}) {
     if (!canvas) return;
 
     const rect = element.getBoundingClientRect();
-    const config = { ...DEFAULT_CONFIGS.realistic, ...options };
+    let currentOptions = { ...DEFAULT_CONFIGS.realistic, ...options };
 
-    const dispose = realisticWaterHoverEffect(canvas, {
+    let dispose = realisticWaterHoverEffect(canvas, {
       imageUrl,
       width: Math.min(rect.width || 400, 384),
       height: Math.min(rect.height || 300, 288),
-      ...mapAdvancedFilterConfig(config),
-      ...config,
+      ...mapAdvancedFilterConfig(currentOptions),
+      ...currentOptions,
     });
+
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = realisticWaterHoverEffect(canvas, {
+        imageUrl,
+        width: Math.min(rect.width || 400, 384),
+        height: Math.min(rect.height || 300, 288),
+        ...mapAdvancedFilterConfig(currentOptions),
+        ...currentOptions,
+      });
+      activeEffects.set(element, dispose);
+    };
+
+    if (options && options.debug === true) {
+      createDatGuiForProgrammatic("realistic", currentOptions, recreate);
+    }
 
     disposes.push(dispose);
     activeEffects.set(element, dispose);
   });
 
+  return () => disposes.forEach((dispose) => dispose());
+}
+
+function glitchEffectSimple(selector, options = {}) {
+  const elements =
+    typeof selector === "string"
+      ? document.querySelectorAll(selector)
+      : [selector];
+  const disposes = [];
+  elements.forEach((element) => {
+    const imageUrl = getImageUrl(element);
+    if (!imageUrl) {
+      console.warn("kxxxr.glitchEffect: No image found for element");
+      return;
+    }
+    const canvas = createCanvas(element);
+    if (!canvas) return;
+    let currentOptions = { ...DEFAULT_CONFIGS.glitch, ...options };
+    let dispose = glitchEffect(canvas, { imageUrl, ...currentOptions });
+
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = glitchEffect(canvas, { imageUrl, ...currentOptions });
+      activeEffects.set(element, dispose);
+    };
+
+    if (options && options.debug === true) {
+      createDatGuiForProgrammatic("glitch", currentOptions, recreate);
+    }
+
+    disposes.push(dispose);
+    activeEffects.set(element, dispose);
+  });
+  return () => disposes.forEach((dispose) => dispose());
+}
+
+function fluidEffectSimple(selector, options = {}) {
+  const elements =
+    typeof selector === "string"
+      ? document.querySelectorAll(selector)
+      : [selector];
+  const disposes = [];
+  elements.forEach((element) => {
+    const imageUrl = getImageUrl(element);
+    if (!imageUrl) {
+      console.warn("kxxxr.fluidEffect: No image found for element");
+      return;
+    }
+    const canvas = createCanvas(element);
+    if (!canvas) return;
+    const rect = element.getBoundingClientRect();
+    let currentOptions = { ...DEFAULT_CONFIGS.fluid, ...options };
+    let dispose = fluidSimulationEffect(canvas, {
+      imageUrl,
+      backImageUrl: options.backImageUrl,
+      width: rect.width || 512,
+      height: rect.height || 384,
+      ...currentOptions,
+    });
+
+    const recreate = () => {
+      if (dispose) dispose();
+      dispose = fluidSimulationEffect(canvas, {
+        imageUrl,
+        backImageUrl: options.backImageUrl,
+        width: rect.width || 512,
+        height: rect.height || 384,
+        ...currentOptions,
+      });
+      activeEffects.set(element, dispose);
+    };
+
+    if (options && options.debug === true) {
+      createDatGuiForProgrammatic("fluid", currentOptions, recreate);
+    }
+
+    disposes.push(dispose);
+    activeEffects.set(element, dispose);
+  });
   return () => disposes.forEach((dispose) => dispose());
 }
 
@@ -32655,12 +33855,16 @@ if (typeof window !== "undefined") {
     // Simple API methods
     rippleEffect,
     realisticEffect: realisticEffectSimple,
+    glitchEffect: glitchEffectSimple,
+    fluidEffect: fluidEffectSimple,
     // Legacy methods
     effects: {
       ripple: waterHoverEffect,
       realistic: realisticWaterHoverEffect,
+      glitch: glitchEffect,
+      fluid: fluidSimulationEffect,
     },
   };
 }
 
-export { cleanupKxxxrEffects, initKxxxrEffects, realisticWaterHoverEffect, reinitKxxxrEffects, waterHoverEffect };
+export { cleanupKxxxrEffects, fluidSimulationEffect, glitchEffect, initKxxxrEffects, realisticWaterHoverEffect, reinitKxxxrEffects, waterHoverEffect };
