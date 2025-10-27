@@ -4,7 +4,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="/assets/LogoWhite.svg" type="image/svg+xml">
+    <link rel="icon" href="./assets/LogoWhite.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.png" type="image/png">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
     <title>kxxxr.js</title>
   
     <style>
@@ -93,6 +95,8 @@
         .desktop-demo {
           display: none;
         }
+        /* Hide debug controls on mobile (dat.gui root uses .dg/.ac) */
+        .dg, .dg.ac { display: none !important; }
       }
 
       .wrap {
