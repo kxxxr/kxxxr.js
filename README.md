@@ -16,7 +16,8 @@ kxxxr.js brings interactive effects to the web with a lightweight WebGL renderer
 
 [Live Demo](https://kxxxr-js.vercel.app)
 
-![kxxxr.js Demo Preview](demo/assets/demo.gif)
+<img src="demo/assets/demo.gif" width="350" alt="kxxxr.js Demo Preview" style="display:inline-block;margin-right:16px;">
+<img src="demo/assets/Two New.gif" width="350" alt="kxxxr.js Demo 2 Preview" style="display:inline-block;">
 
 ## Key Features
 
