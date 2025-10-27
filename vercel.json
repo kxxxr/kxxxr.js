@@ -17,6 +17,14 @@
       "dest": "/demo/index.html"
     },
     {
+      "src": "/favicon.ico",
+      "dest": "/demo/assets/LogoWhite.svg"
+    },
+    {
+      "src": "/favicon.png",
+      "dest": "/demo/assets/logoFavi.png"
+    },
+    {
       "src": "/assets/(.*)",
       "dest": "/demo/assets/$1"
     },
